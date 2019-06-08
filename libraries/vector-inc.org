@@ -140,13 +140,13 @@ END:
   #+INFOJS_OPT: view:info toc:t ftoc:t ltoc:t mouse:underline buttons:t path:libs/org-info.js
   #+EXPORT_SELECT_TAGS: export
   #+EXPORT_EXCLUDE_TAGS: noexport
-  #+HTML_LINK_UP: index.html
-  #+HTML_LINK_HOME: index.html
+  #+HTML_LINK_UP: ../index.html
+  #+HTML_LINK_HOME: ../index.html
 
   # -- For ox-twbs or HTML Export
-  #+HTML_HEAD: <link href="libs/bootstrap.min.css" rel="stylesheet">
-  #+HTML_HEAD: <script src="libs/jquery.min.js"></script> 
-  #+HTML_HEAD: <script src="libs/bootstrap.min.js"></script>
+  #+HTML_HEAD: <link href="../libs/bootstrap.min.css" rel="stylesheet">
+  #+HTML_HEAD: <script src="../libs/jquery.min.js"></script> 
+  #+HTML_HEAD: <script src="../libs/bootstrap.min.js"></script>
   #+LANGUAGE: en
 
   # Local Variables:
