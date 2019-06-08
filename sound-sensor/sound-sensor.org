@@ -301,7 +301,7 @@ Repeat the loop.
 
 * Include needed libraries
 
-Include the USART library explained at section [[*Send data by USART][Send data by USART]].
+Include the USART library.
 
 #+BEGIN_SRC asm
 .include "../libraries/usart-lib.asm"
