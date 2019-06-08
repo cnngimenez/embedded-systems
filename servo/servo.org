@@ -1,14 +1,8 @@
+#+PROPERTY: header-args :tangle main.asm :mkdirp yes :comments no :padline yes
 
 * License of this work
-
 This work is licensed under the General Public License version 3 (GPLv3).
 
-* Main Program
-:PROPERTIES:
-:header-args: :tangle main.asm :mkdirp yes :comments no :padline yes
-:END:
-
-** License
 #+BEGIN_SRC asm
 ;; Copyright 2019 Christian Gimenez
 	   
@@ -30,20 +24,21 @@ This work is licensed under the General Public License version 3 (GPLv3).
 ;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #+END_SRC
 
-** Usefull macros
+* Usefull macros
 The following files includes some interesting macros and do some preliminary stuff.
 
 This file creates the vector table for interruptions. It is not used here because no ~sei~ intruction is used.
+
 #+BEGIN_SRC asm
           ;; Vector table
-          .include "vectors.asm"
+          .include "../libraries/vector-inc.asm"
 
-          .include "registers.asm"
+          .include "../libraries/registers-inc.asm"
           .text
 RESET:
 #+END_SRC
 
-** Configure clock 
+* Configure clock
 
 The wave must be setted at high for 1 or 2 ms and then to low for the rest of the 20ms of the PWM period. Depending on the time of the high is the order to the servo motor.
 
@@ -56,7 +51,7 @@ The wave must be setted at high for 1 or 2 ms and then to low for the rest of th
 |-------------------------------+-----------|
 
 
-*** Compare Output Mode
+** Compare Output Mode
 The clock must be at high state when starting and low when the counter matches. This is setted at the *COM1A1 and COM1A0* bits at the TCCR1A register.
 
 The mode needed for this non-inverting mode is the following:
@@ -67,7 +62,7 @@ The mode needed for this non-inverting mode is the following:
 |      1 |      0 |
 |--------+--------|
 
-*** Waveform Generation Mode
+** Waveform Generation Mode
 The mode for such behaviour is called WGM (Waveform Generation Mode) 14. 
 
 For this, the WGM13, WGM12 and WGM11 bits must be setted to 1. This fields are at the TCCR1A and TCCR1B register.
@@ -80,7 +75,7 @@ Then, the following must be setted:
 |     1 |     1 |     1 |     0 |
 |-------+-------+-------+-------|
 
-*** Setting the TCCR1A register
+** Setting the TCCR1A register
 
 According to the above, the register must be setted at this value:
 
@@ -95,7 +90,7 @@ According to the above, the register must be setted at this value:
 	sts TCCR1A, r16
 #+END_SRC
 
-*** Define the TOP value
+** Define the TOP value
 
 The TOP value is setted at the Input Capture Register (ICR1) register. Depending on the mode this behaviour can change, but for the WGM 14 mode, the table at the datasheet indicates that the TOP is at ICR1.
 
@@ -115,7 +110,7 @@ This will change our values: A millisecond is 16000/64 = 250 cicles, and 20 mill
 	sts ICR1L, r16
 #+END_SRC
 
-*** Presample
+** Presample
 
 The presample is setted at the TCCR1B register on the CS12, CS11 and CS10 bits.
 
@@ -127,8 +122,7 @@ The following value will set the presample at 1/64 cicles.
 |    0 |    1 |    1 |
 |------+------+------|
 
-
-*** Setting the TCCR1B register
+** Setting the TCCR1B register
 
 According to the above information, the register must be setted at this value:
 
@@ -143,9 +137,9 @@ According to the above information, the register must be setted at this value:
 	sts TCCR1B, r16
 #+END_SRC
 
-** Set the pin directions
+* Set the pin directions
 
-*** Set the OCR1 direction
+** Set the OCR1 direction
 
 The 9th pin at the Arduino UNO board is at the PB1 output of the Atmel processor. The direction for this port is controlled at the DDRB register at the first bit. Setting it to 1 means it will be used as an output port.
 
@@ -153,7 +147,7 @@ The 9th pin at the Arduino UNO board is at the PB1 output of the Atmel processor
 sbi ODDRB, 1
 #+END_SRC
 
-*** Set a LED output
+** Set a LED output
 
 The L led in the board is also assigned to the SCR or 6th pin on the Arduino board. To control it the PB5 port must be setted as an output port using the DDRB's 5 bit. 
 
@@ -163,8 +157,7 @@ This led will toggle at each command given to the servo.
 sbi ODDRB, 5
 #+END_SRC
 
-
-** The loop - Moving the Servo
+* The loop - Moving the Servo
 
 Moving the servo motor requires to set the OCR1A 16-bit register with a value that the counter can use to follow the 1ms, 1.5ms or 2ms for -90, 0, 90 degrees movement respectivelly.
 
@@ -191,7 +184,7 @@ LOOP:
 
 #+END_SRC
 
-*** Turn -90
+** Turn -90
 Then, the Arduino will turn the servo in -90 degrees with 250 cicles.
 
 #
@@ -207,13 +200,14 @@ Then, the Arduino will turn the servo in -90 degrees with 250 cicles.
 	sts OCR1AL, r17
 #+END_SRC
 
-Wait some seconds for allowing the servo to move.
+Give some seconds to move the servo.
 
 #+BEGIN_SRC asm
+    ldi r16, 0x80
 	rcall WAIT
 #+END_SRC
 
-*** Turn 90
+** Turn 90
 Toggle the led. 
 
 #+BEGIN_SRC asm
@@ -232,32 +226,30 @@ Send the command for turning the servo in 90 degrees with 500 cicles (1'1111'010
 Wait for the servo to move.
 
 #+BEGIN_SRC asm
+    ldi r16, 0x80
 	rcall WAIT
 #+END_SRC
 
-*** Repeat the loop
+** Repeat the loop
 
 #+BEGIN_SRC asm
 	rjmp LOOP
 #+END_SRC
 
-** Include the wait file
-
-Section [[*Wait file][Wait file]] explains the assembler code for making Arduino wait some seconds.
-
-This line includes the file.
+* Include the wait file
+This line includes the wait-lib file.
 
 #+BEGIN_SRC asm
-	.include "wait.asm"
+	.include "../libraries/wait-lib.asm"
 #+END_SRC
 
-** Led Commands
+* Led Commands
 
 This commands toggle the led on and off. First, it is needed to configure the direction of the pin used for the led as "output". This is accomplished in section [[*Set a LED output][Set a LED output]].
 
 According to the Arduino UNO schema, the PB5 is connected to the L led. Thus, there is no need to connect a led and resistence to the pin mentioned.
 
-*** Turn on the led
+** Turn on the led
 Set the 5th bit on port B and return from the subroutine.
 
 #+BEGIN_SRC asm
@@ -266,7 +258,7 @@ TURN_ON:
 	ret
 #+END_SRC
 
-*** Turn off the led
+** Turn off the led
 Clear the 5th bit on port B and return from the subroutine.
 
 #+BEGIN_SRC asm
@@ -275,7 +267,7 @@ TURN_OFF:
 	ret
 #+END_SRC
 
-** Vector Handlers
+* Vector Handlers
 This vector handlers are not used. But the vector table imported jumps to here, so the assembler needs these labels defined.
 
 #+BEGIN_SRC asm
@@ -309,124 +301,13 @@ TWI:		; 2-wire Serial Interface Handler
 SMP_RDY:	; SPM_RDYStore Program Memory Ready 
 #+END_SRC
 
-** End program
+* End program
 This will end the program as soon as ~rjmp END~ is issued. However, is not used because the loop is infinite.
 
 #+BEGIN_SRC asm
 	;; __________________________________________________
 END:
 	nop
-#+END_SRC
-
-
-* Wait file
-:PROPERTIES:
-:header-args: :tangle wait.asm :padline yes :comments no
-:END:
-
-
-This subroutine use three register to count operations. The base idea is to make the CPU idle by executing ~nop~ instructions.
-
-The register r17 will count from 0 to 255, the r18 will help on counting up to 65535 and r19 up to 16777215 (0x00ffffff). However, counting up to 9000000 cicles (i.e. let's say 0x80ffff or 8454143 in decimal) at least will be enough (multiplied by the amount of instructiens needed for the operation and by the ~nop~ instructions).
-
-** License
-#+BEGIN_SRC asm
-;; Copyright 2019 Christian Gimenez
-	   
-;; Author: Christian Gimenez
-
-;; wait.asm
-	   
-;; This program is free software: you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or
-;; (at your option) any later version.
-	   
-;; This program is distributed in the hope that it will be useful,
-;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-	   
-;; You should have received a copy of the GNU General Public License
-;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
-#+END_SRC
-
-** Initialize registers
-
-Supposedly, the following register must be saved in memory. This saves the date in case of the main routine uses them. In this case, these registers were not used in the main program and use it directly.
-
-Zero the needed registers.
-
-#+BEGIN_SRC asm
-	;; Registers used:
-	;; r17, r18, r19
-WAIT:
-	ldi r17, 0
-	ldi r18, 0
-	ldi r19, 0
-#+END_SRC
-
-** First loop
-This first loop will increment the r17 from 0x00 to 0xff.
-
-To begin with, some ~nop~ instructions for giving more time.
-
-#+BEGIN_SRC asm
-LOOP_WAIT:
-	nop
-	nop
-	nop
-	nop
-	nop
-#+END_SRC
-
-Increment the register by one and compare if it reached 0xff. If it reaches the amount, then branch to increment the r18 register, else continue looping.
-
-#+BEGIN_SRC asm
-	inc r17
-	cpi r17, 0xff
-	breq WAIT1_END
-
-	rjmp LOOP_WAIT
-#+END_SRC
- 
-** Second part
-Reset the r17 to zero for starting the first loop again.
-
-#+BEGIN_SRC asm
-WAIT1_END:
-	;; check if the high value is UPPER
-	ldi r17, 0
-#+END_SRC
-
-Increment r18 and check if reached 0xff. If it reaches then increment the r19, if not restore the first loop sequence.
-
-#+BEGIN_SRC asm
-	inc r18
-	cpi r18, 0xff
-	brne LOOP_WAIT
-#+END_SRC
-
-** Third part
-Same as the second part, reset the r18.
-
-#+BEGIN_SRC asm
-WAIT2_END:
-	ldi r18, 0
-#+END_SRC
-
-Increment r19 and check if reached 0x80 (in total 0x80ffff), if not continue the loop, else return from the subroutine.
-
-#+BEGIN_SRC asm
-	inc r19
-	cpi r19, 0x80
-	brne LOOP_WAIT
-#+END_SRC
-
-** Return the subroutine
-
-#+BEGIN_SRC asm
-	ret			; UPPER waiting limit achieved
 #+END_SRC
 
 

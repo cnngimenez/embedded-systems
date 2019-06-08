@@ -18,9 +18,9 @@
 ;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 ;; Vector table
-          .include "vectors.asm"
+          .include "../libraries/vector-inc.asm"
 
-          .include "registers.asm"
+          .include "../libraries/registers-inc.asm"
           .text
 RESET:
 
@@ -48,7 +48,8 @@ ldi r17, 250
     sts OCR1AH, r16
     sts OCR1AL, r17
 
-rcall WAIT
+ldi r16, 0x80
+    rcall WAIT
 
 rcall TURN_OFF
 
@@ -57,11 +58,12 @@ ldi r17, 0b11110100
     sts OCR1AH, r16
     sts OCR1AL, r17
 
-rcall WAIT
+ldi r16, 0x80
+    rcall WAIT
 
 rjmp LOOP
 
-.include "wait.asm"
+.include "../libraries/wait-lib.asm"
 
 TURN_ON:
 	sbi OPORTB, 5
