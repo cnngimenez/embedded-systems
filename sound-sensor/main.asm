@@ -1,5 +1,5 @@
-.include "vectors.asm"
-.include "registers.asm"
+.include "../libraries/vector-inc.asm"
+.include "../libraries/registers-inc.asm"
 
 .section .rodata
 
@@ -89,13 +89,14 @@ ldi r18, 13       ;; 13 is carriage return in ASCII
 call USART_PUT
 call USART_HEX
 
-call WAIT
+ldi r16, 0x30
+rcall WAIT
 
 rjmp MAIN_LOOP
 
-.include "usart.asm"
+.include "../libraries/usart-lib.asm"
 
-.include "wait.asm"
+.include "../libraries/wait-lib.asm"
 
 ;; __________________________________________________
 	;; Vector Handlers

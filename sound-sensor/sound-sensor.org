@@ -1,8 +1,4 @@
-
-* Get Sound Data
-:PROPERTIES:
-:header-args: :comments no :padline yes :tangle main.asm 
-:END:
+#+PROPERTY: header-args :comments no :padline yes :tangle main.asm 
 
 There are three important registers for the ADC:
 
@@ -10,13 +6,13 @@ There are three important registers for the ADC:
 - ADCSRA :: Status and control
 - ADC :: Data registers
 
-** Include needed files
+* Include needed files
 #+BEGIN_SRC asm
-.include "vectors.asm"
-.include "registers.asm"
+.include "../libraries/vector-inc.asm"
+.include "../libraries/registers-inc.asm"
 #+END_SRC
 
-** Static data
+* Static data
 
 This section is for read only data.
 
@@ -24,7 +20,7 @@ This section is for read only data.
 .section .rodata
 #+END_SRC
 
-*** Some data to test the USART
+** Some data to test the USART
 This is a "hello" that will be sendend through the USART.
 
 Important: The address ~.SDhello~ assigned by GNU Assembler will depend on the linker parameters. The ~-Tdata=0x800100~ will indicate that the start of data will be at the 0x0100 address of the SRAM. Atmel 328p datasheet designates that the SRAM has registers mapped from 0x0000 to 0x00ff, so assign ~.SDhello~ must be assigned to start at 0x0100 minimum.
@@ -34,14 +30,14 @@ Important: The address ~.SDhello~ assigned by GNU Assembler will depend on the l
     .string "hello "
 #+END_SRC
 
-** Start code of the program
+* Start code of the program
 #+BEGIN_SRC asm
 .text
 
 RESET:
 #+END_SRC
 
-** Copy the string constant to data memory
+* Copy the string constant to data memory
 String constants are at the program memory (0x0000 address in the program memory is not the same as 0x0000 at the SRAM!).
 
 This copy all the string into SRAM.
@@ -68,8 +64,7 @@ CONT_PROGRAM:
   st X+, r16   ; store the zero char
 #+END_SRC
 
-
-** Initialize the USART library
+* Initialize the USART library
 Call the init subroutine.
 
 #+BEGIN_SRC asm
@@ -90,9 +85,9 @@ Test sending a "hello". Take the pointer from the string memory and send it to t
   call USART_HEX
 #+END_SRC
 
-** Configure ADC
+* Configure ADC
 
-*** Configure the input selection ADMUX
+** Configure the input selection ADMUX
 
    The ADMUX register is located at 0x7C in ATMEL 328p. It has the following format:
 
@@ -106,7 +101,7 @@ Test sending a "hello". Take the pointer from the string memory and send it to t
    - ADLAR :: ADC Left Adjust Result
    - MUX :: Analog Channel Selection.
 
-**** Voltage Reference Configuration
+*** Voltage Reference Configuration
 
    The ADC requires a voltage as reference. There are three possible options:
 
@@ -138,7 +133,7 @@ Test sending a "hello". Take the pointer from the string memory and send it to t
   sts ADMUX, r16
 #+END_SRC
 
-**** Input Channel Configuration
+*** Input Channel Configuration
 
 The MUX bits configure which ADCn channel to use. ADC0 to 5 is connected in order to the AD1 to 6 of the Arduino board. Convert the binary number of these bits into decimal to know which ADCn channel is used.
 
@@ -184,14 +179,14 @@ Another possibility is to use the input channel at 1110 that means to send a 1.1
 #+END_SRC
 
 
-**** Right ajusted result
+*** Right ajusted result
 There is no need to adjust the result to the left. This is interesting when only one byte of the result is needed because the the ADC has to be red carefully.
 
 Once the ADCL is red, the ADC registers blocks to ensure that the ADCH bits correponds to the same reading. After reading the ADCH, the registers will unlock and a new reading can be written on them. If a new reading interrupt the reading between ADCL and ADCH, this blocking mechanism will not allow it to be stored preserving the ADCH previous value and the circuit will lose the new one.
 
 For right ajusted result, the ADLAR bit must be at 0.
 
-*** Configure the control and status register ADCSRA
+** Configure the control and status register ADCSRA
 
 The ARC Control and Status Register A (ADCSRA) is located at the 0x7A memory address in the Atmel 328p processor. This register has the following format:
 
@@ -210,7 +205,7 @@ All the bits are initialized at zero and are readable and writable.
    
 There are two task that is needed: set the prescaler to a suitable value according to the ADC clock cicle and to enable the ADC.
 
-**** Set the prescaler
+*** Set the prescaler
 The prescaler is the division factor between the external clock frequency and the ADC clock to the ADC. According to the Atmel 328p datasheet, the ADC clock works between 50kHz and 200kHz. The external clock at the Arduino board works 16MHz. If the external clock is replaced by another this prescalar must be reconfigured.
 
 
@@ -234,7 +229,7 @@ According to the Atmel 328p datasheet, ADPS2:0 must have the value 111 for a pre
   sts ADCSRA, r16
 #+END_SRC
 
-**** Set the auto trigger
+*** Set the auto trigger
 To read values continuously, the auto trigger must be enabled.
 
 #+BEGIN_SRC asm
@@ -244,8 +239,7 @@ To read values continuously, the auto trigger must be enabled.
   sts ADCSRA, r16
 #+END_SRC
 
-
-** Reading loop
+* Reading loop
 
 Declare a label for reapeating the loop and initialize registers that will store the data. 
 
@@ -295,7 +289,8 @@ Now, send the value as character through USART serial protocol.
 A wait call, so the program won't saturate the user's reading.
 
 #+BEGIN_SRC asm
-  call WAIT
+  ldi r16, 0x30
+  rcall WAIT
 #+END_SRC
 
 Repeat the loop.
@@ -304,23 +299,21 @@ Repeat the loop.
   rjmp MAIN_LOOP
 #+END_SRC
 
-
-** Include needed libraries
+* Include needed libraries
 
 Include the USART library explained at section [[*Send data by USART][Send data by USART]].
 
 #+BEGIN_SRC asm
-.include "usart.asm"
+.include "../libraries/usart-lib.asm"
 #+END_SRC
 
 Include the wait library which imports a command for waiting.
 
 #+BEGIN_SRC asm
-.include "wait.asm"
+.include "../libraries/wait-lib.asm"
 #+END_SRC
 
-
-** Vector Table
+* Vector Table
 
 #+BEGIN_SRC asm
 ;; __________________________________________________
@@ -366,299 +359,6 @@ Reference to the static data. The assembler store them at the end.
 STATIC_DATA:
 #+END_SRC
 
-
-
-* Send data by USART
-:PROPERTIES:
-:header-args: :comments no :padline yes :tangle usart.asm
-:END:
-
-For sending the sensed value to a computer, a serial connection based on the USART protocol will be used.
-
-This sections describes a new assembler file which configure and declare some subroutines for transforming and sending the data to the computer
-
-** Initialize USART
-Configure the following (register/bits is shown in parenthesis): 
-
-- 9600 baud rate (UBBR).
-- enable the transmitter (UCSRB/TXEN).
-- use the async USART mode (UCSRC/UMSEL).
-- no parity bit (UCSRC/UPM).
-- 1 stop bit for the transmission (UCSRC/USBS).
-- 8 bits of character (UCSRC/UCSZ).
-
-Remember this configuration because the ~minicom~ or ~stty~ will need these. Minicom have to show the ~9600 8N1~ mode.
-
-Declare a label for the USART initialization. Save temporary registers.
-
-#+BEGIN_SRC asm
-USART_INIT:
-    push r16
-    push r17
-#+END_SRC
-
-*** Prepare the USART Baud Rate Register UBRR
-Prepare the 9600bps at the USART Baud Rate Register (UBRR). According to the Atmel 328p datasheet, the UBRR value is calculated according to the following formulae: $UBRRn = \frac{f_{osc}}{16 \cdot BAUD} - 1$. The f_{osc} is the frequency of the external timer which in the Arduino UNO is 16MHz. The UBBR value is:
-
-$$UBBR = \frac{f_{osc} }{16 \cdot BAUD} - 1 = \frac{16000000}{16 \cdot 9600} - 1 = 103.166666667$$
-
-#+BEGIN_SRC asm
-    ldi r16, 0
-    ldi r17, 103
-    sts UBRR0H, r16
-    sts UBRR0L, r17
-#+END_SRC
-
-*** Set the USART Control and Status Register UCSR
-
-There are three USART Control and Status Register (UCSR). The UCSR A is principally a status control. At the UCSR B, there are two important bits: RXEN and TXEN that enable the transmitter. The UCSR C determines the async mode, the parity bit, the stop bit and the 8 bit character format.
-
-**** Configure UCSR A
-All the bits except TXCn, U2Xn and MPCMn are read-only values. The initial values are the following:
-
-- RXCn :: 0 (Receive Complete)
-- TXCn :: 0 (Transmit Complete)
-- UDREn :: 1 (Data Register Empty)
-- FEn :: 0 (Frame Error)
-- DORn :: 0 (Data OverRun)
-- UPEn :: 0 (USART Parity Error)
-- U2Xn :: 0 (Double the USART transmition speed)
-- MPCMn :: 0 (MultiProcessor Communication Mode)
-
-These values are correct and will not be changed.
-
-**** Configure UCSR B
-The initial values are the following:
-
-- RCXIEn :: 0 (RX Complete Interrupt Enable).
-- TCXIEn :: 0 (TX Complete Interrupt Enable).
-- UDRIEn :: 0 (USART Data Register Empty Interrupt Enable).
-- RXENn :: 0 (Receiver Enable).
-- TXENn :: 0 (Transmitter Enable).
-- UCSZn2 :: 0 (Character Size).
-- RXB8n :: 0 (Received 8th data bit).
-- TXB8n :: 0 (Received 8th data bit).
-
-The following code enables the RXEN and TXEN bits.
-
-#+BEGIN_SRC asm
-    lds r16, UCSR0B
-    set
-    bld r16, 4       ; RXEN0 is 4th bit
-    bld r16, 3       ; TXEN0 is 3rd bit
-    sts UCSR0B, r16
-#+END_SRC
-
-**** Configure UCSR C
-The initial value is the following:
-
-- UMSELn1:0 :: 00 (Async USART mode selected)
-- UPMn1:0 :: 00 (Parity bits disabled)
-- USBSn :: 0 (Stop bit of 1 bit)
-- UCSZn1:0 :: 11 (with UCSRC/UCSZn3 at 0: 8 bits character formats)
-- UCPOL :: 0 (Rising edge polarity)
-
-Then, no value needs to be selected.
-
-*** Return from the subroutine
-Restore register used and return from the subroutine.
-
-#+BEGIN_SRC asm
-    pop r17
-    pop r16
-    ret
-#+END_SRC
-
-** Send character
-The following section describe the assembler code for sending a character to the computer. This character must be stored at the r18 register.
-
-Parameters:
-
-- r18 :: the character data to send.
-
-Declare a label to call this subroutine.
-
-#+BEGIN_SRC asm
-USART_PUT:
-#+END_SRC
-
-Save the register to use.
-
-#+BEGIN_SRC asm
-    push r16
-#+END_SRC
-
-
-Wait for the completion of the previous transmission.
-
-#+BEGIN_SRC asm
-1: 
-    lds r16, UCSR0A
-    sbrs r16, 5       ; bit 5 is UDRE
-    rjmp 1b
-#+END_SRC
-
-The data is empty, store the character to send and USART will start sending.
-
-#+BEGIN_SRC asm
-    sts UDR0, r18
-#+END_SRC
-
-Restore registers and return from the subroutine.
-
-#+BEGIN_SRC asm
-    pop r16
-    ret
-#+END_SRC
-
-** Send a string
-The subroutine declared at the section [[*Send character][Send character]] will be used for sending each character.
-
-Parameters:
-
-- X :: 16bit address pointer to the string in SRAM to send.
-
-Registers that will be used (they are saved on the stack):
-
-- r18
-- r19
-
-First, declare a label to call the subroutine.
-
-#+BEGIN_SRC asm
-USART_SEND:
-#+END_SRC
-
-Save the register that are used.
-
-#+BEGIN_SRC asm
-    push r18
-    push r19
-#+END_SRC
-
-Get one character from the X register parameter and increment 1.
-
-#+BEGIN_SRC asm
-1:
-    ld r18, X+
-#+END_SRC
-
-Check if the character is zero, and if it is, return from the subroutine. The Z bit at the Status Register (SREG) is 1 when the comparison with ~cpi~ is true. ~cpi Rd, k~ applies the substraction ~Rd - k~ without saving the result but changing the Z, N, V, C and H bits at SREG accordingly. ~tst Rd~ could be used but  the result goes to the same Rd register losing the character if it is not zero.
-The ~sbrc SREG, 1~ instruction will skip the next line if the Z bit is cleared (~Rd - k~ is not zero and thus, they are different).
-
-#+BEGIN_SRC asm
-    cpi r18, 0      ; Z = 1 if r18 - 0 = 0
-    lds r19, SREG
-    sbrc r19, 1    ; 1 is Z bit 
-    rjmp 2f             ; if r18 is 0 (Z = 0) then return subroutine
-#+END_SRC
-
-The character is not zero, send it.
-
-#+BEGIN_SRC asm
-    call USART_PUT
-#+END_SRC
-
-Do the process again.
-
-#+BEGIN_SRC asm
-    rjmp 1b
-#+END_SRC
-   
-Return part. First restore register and return.
-
-#+BEGIN_SRC asm
-2:
-    pop r19
-    pop r18
-    ret 
-#+END_SRC
-
-** Send an unsigned integer
-This section explains how to cast a 16bit unsigned integer into string and send it through USART.
-
-Parameters:
-
-- X registers :: The number in hex to print.
-
-Declare the subroutine and save "local" registers.
-
-#+BEGIN_SRC asm
-USART_HEX:
-    push r16
-    push r17
-    push r18
-    push r19
-#+END_SRC
-
-Initialize counter.
-
-#+BEGIN_SRC asm
-    ldi r19, 0b1111
-#+END_SRC
-
-First, make a copy of XH and keep with the four last bits. 
-
-#+BEGIN_SRC asm
-1:
-    mov r16, XH
-    lsr r16
-    lsr r16
-    lsr r16
-    lsr r16
-#+END_SRC
-
-Check if it is a number between 0x1 to 0x9.
-
-#+BEGIN_SRC asm
-    cpi r16, 0x0a
-    brlo 2f
-    ;; It is a digit between 0x0a to 0x0f
-    subi r16, 0x0a
-    ldi r17, 65     ;; 65 is ASCII for "A"
-    add r16, r17
-    mov r18, r16
-    rcall USART_PUT    
-    rjmp 3f
-2: 
-    ;; It is a number between 0x01 to 0x09
-    ldi r17, 48     ;; 48 is ASCII for "0"
-    add r16, r17
-    mov r18, r16
-    rcall USART_PUT
-    rjmp 3f
-#+END_SRC
-
-
-Remove the last four bits already printed in hex and check if all bits in XH are is zero. If they are, use XL as XH.
-
-#+BEGIN_SRC asm
-3:
-    lsr r19 ;; reduce one bit from the counter
-
-    lsl XH
-    lsl XH
-    lsl XH
-    lsl XH
-
-    cpi r19, 0b0000
-    breq 4f  ;; r19 counter is zero, return.
-
-    cpi r19, 0b0011
-    brne 1b  ;; r19 counter is working!
-
-    ;; counter is 0b0011: work with XL
-    mov XH, XL
-    rjmp 1b
-
-4:
-    ;; XL and XH is 0x00! return!
-    pop r19
-    pop r18
-    pop r17
-    pop r16
-    ret
-#+END_SRC
 
 
 * Meta     :noexport:
