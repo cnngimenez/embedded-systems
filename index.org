@@ -1,8 +1,12 @@
+Examples made for the Arduino board.
 
+- [[file:sound-sensor/sound-sensor.org][Sound Sensor Example]] (ADC example)
 - [[file:echo/echo.org][Serial Echo Example]] (UART example) 
 - [[file:servo/servo.org][Servo Motor Example]] (PWM example)
 
-[[file:sitemap.org][Sitemap]] | [[file:theindex.org][Index]]
+These examples are at a Bitbucket repository at this URL: https://bitbucket.org/cnngimenez/embedded_systems
+
+[[file:sitemap.org][Sitemap]]
 
 * Meta     :noexport:
 
