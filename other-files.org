@@ -1,0 +1,179 @@
+
+* GDB Init
+:PROPERTIES:
+:header-args: :comments no :padline yes :tangle .gdbinit
+:END:
+
+This file helps on debugging the code with the simavr and GDB tool. The commands in this file is executed as soon as the ~avr-gdb~ tool runs. 
+
+First, tell GDB to use the simmulator as a target machine. The ~simavr~ starts at the 1234 localhost's port.
+
+#+BEGIN_SRC gdb-script
+target remote :1234
+#+END_SRC
+
+Load the debugging symbols from the ~main.elf~ file.
+
+#+BEGIN_SRC gdb-script
+file main.elf
+#+END_SRC
+
+The dashboard pluging is very useful to see the processor status at each step. This command displays the data SRAM memory at 0x0100 (0x800100 address assigned by the linker program).
+
+#+BEGIN_SRC gdb-script
+dashboard memory watch 0x800100
+#+END_SRC
+
+** Useful GDB commands
+
+- x /10i 0 :: List from 0x00 program address. List 10 bytes as instructions.
+- x /10u 0x1 :: List from 0x800001 address (0x0001 SRAM address). List 10 bytes as unsigned integers.
+- set $r16=10 :: Set the register r16 with value 10.
+- s :: step
+
+
+* Makefile
+:PROPERTIES:
+:header-args: :comments no :padline yes :tangle Makefile
+:END:
+
+The ~make~ command compiles and uploads the program to the Arduino board.
+
+~make~ alone will compile the files. ~make install~ will compile and upload the program into the flash memory of the Arduino board.
+
+** Variables
+Define variables that changes the behaviour and results of the compiler.
+
+*** Input file
+#+BEGIN_SRC makefile
+# File to compile
+FILE=main
+#+END_SRC
+
+*** Compiler GCC variables
+This affects the compilation of C files.
+
+#+BEGIN_SRC makefile
+# Compiling variables
+# --------------------------------------------------
+
+# Instruction set architecture (ISA):
+# MMCU=atmega2560
+MMCU=atmega328p
+
+# Optimizations (For debugging with simavr you should deactivate this)
+OPT=-Os
+
+# Include this C headers
+INCLUDES=-I/usr/avr/include/avr
+
+# CPU Frequency
+F_CPU=16000000UL
+#+END_SRC
+
+*** Flashing Parameters
+
+#+BEGIN_SRC makefile
+# Flashing variables
+# --------------------------------------------------
+
+# Port to use
+PORT=/dev/ttyUSB0
+# Type of MCU connected to the programmer
+# PARTNO=atmega2560
+PARTNO=atmega328p
+# Programmer id
+# PROGID=wiring
+PROGID=arduino
+# Baud rate
+BAUD=115200
+# Linking Mode to use
+# LD_MODE=avr6
+LD_MODE=avr5
+#+END_SRC
+
+** Rules
+
+*** Compiling rules
+#+BEGIN_SRC makefile
+all:
+#+END_SRC
+
+Uncomment this line in the makefile if a C file has to be compiled. The ~-g~ flag indicates to include debugging symbols for GDB tool and is accepted for gcc, as and ld.
+
+Compiled files by gcc should have a .elf extension (gcc compiles, assemble and link at once).
+
+#+BEGIN_SRC makefile
+# avr-gcc $(OPT) -DF_CPU=$(F_CPU) -mmcu=$(MMCU) $(INCLUDES) -o $(FILE).elf $(FILE).c
+#+END_SRC
+
+Command that compiles assembler files. Assembler input files should have .asm or .s extensions. Output files usually have .o extensions.
+
+#+BEGIN_SRC makefile
+	avr-as -g -mmcu=$(MMCU) -o $(FILE).o $(FILE).asm
+#+END_SRC
+
+Link the assembler files. This step is important to set the label's addresses properly. The ~-Tdata~ parameter defines the address for the SRAM data. Output files have .elf extensions (as they have ELF format).
+
+#+BEGIN_SRC makefile
+	avr-ld -g -m$(LD_MODE) -Tdata=0x800100 -o $(FILE).elf $(FILE).o
+#+END_SRC
+
+Translate the ELF file into HEX format for uploading to the Arduino. ELF file is useful for debugging.
+
+#+BEGIN_SRC makefile
+	avr-objcopy -g -O ihex -R .eeprom $(FILE).elf $(FILE).hex
+#+END_SRC
+
+*** Upload rule
+For the ~install~ rule the ~all~ must be completed before.
+
+#+BEGIN_SRC makefile
+install: all
+#+END_SRC
+
+The avrdude program is used for uploading the hex file to the Arduino's flash memory. In some distributions, there are needed configurations at the ~/etc/avrdude.conf~ file.  
+
+#+BEGIN_SRC makefile
+	avrdude -C//etc/avrdude.conf -p$(PARTNO) -c$(PROGID) -P$(PORT) -b$(BAUD) -D -Uflash:w:$(FILE).hex:i
+#+END_SRC
+
+
+* Meta     :noexport:
+
+  # ----------------------------------------------------------------------
+  #+TITLE:  Other Files
+  #+AUTHOR: Christian Gimenez
+  #+DATE:   08 jun 2019
+  #+EMAIL:
+  #+DESCRIPTION: 
+  #+KEYWORDS: 
+
+  #+STARTUP: inlineimages hidestars content hideblocks entitiespretty indent fninline latexpreview
+  #+TODO: TODO(t!) CURRENT(c!) PAUSED(p!) | DONE(d!) CANCELED(C!@)
+  #+OPTIONS:   H:3 num:t toc:t \n:nil @:t ::t |:t ^:{} -:t f:t *:t <:t
+  #+OPTIONS:   TeX:t LaTeX:t skip:nil d:nil todo:t pri:nil tags:not-in-toc tex:imagemagick
+  #+LINK_UP:   
+  #+LINK_HOME: 
+  #+XSLT:
+
+  # -- HTML Export
+  #+INFOJS_OPT: view:info toc:t ftoc:t ltoc:t mouse:underline buttons:t path:libs/org-info.js
+  #+EXPORT_SELECT_TAGS: export
+  #+EXPORT_EXCLUDE_TAGS: noexport
+  #+HTML_LINK_UP: index.html
+  #+HTML_LINK_HOME: index.html
+
+  # -- For ox-twbs or HTML Export
+  #+HTML_HEAD: <link href="../libs/bootstrap.min.css" rel="stylesheet">
+  #+HTML_HEAD: <script src="../libs/jquery.min.js"></script> 
+  #+HTML_HEAD: <script src="../libs/bootstrap.min.js"></script>
+  #+LANGUAGE: en
+
+  # Local Variables:
+  # org-hide-emphasis-markers: t
+  # org-use-sub-superscripts: "{}"
+  # fill-column: 80
+  # visual-line-fringe-indicators: t
+  # ispell-local-dictionary: "british"
+  # End:

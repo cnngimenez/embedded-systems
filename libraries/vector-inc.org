@@ -1,0 +1,158 @@
+#+PROPERTY: header-args :comments no :padline yes :tangle vector-inc.asm
+
+This file should be used included at the beginning of the program to declare the vector table. 
+
+In AVR, the vector table is a sequence of instructions mapped on a specific program memory address. Each address correspond to an interruption handler. Usually, these instructions are ~jmp~ or ~rjmp~ instructions to a portion of code.
+
+The vector table format depends on the architecture. This vector table is for the Arduino UNO (Atmega 328p) architecture.
+
+* License
+#+BEGIN_SRC asm
+;; Copyright 2019 Christian Gimenez
+	   
+;; Author: Christian Gimenez
+
+;; vectors-inc.asm
+	   
+;; This program is free software: you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
+	   
+;; This program is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+	   
+;; You should have received a copy of the GNU General Public License
+;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#+END_SRC
+
+
+
+* Vector Address
+Tell the compiler where this portion of code will be.
+
+#+BEGIN_SRC asm
+    .org 0
+#+END_SRC
+
+* Vector table
+This is the vector table. The 0x01 address is the RESET handler, the 0x02 is the EXT_INT0 (external interruption), etc.
+
+#+BEGIN_SRC asm
+	rjmp  	RESET		; Reset Handler 
+	rjmp  	EXT_INT0  	; IRQ0 Handler 
+	rjmp  	EXT_INT1  	; IRQ1 Handler 
+	rjmp  	PCINT0  	; PCINT0 Handler 
+	rjmp  	PCINT1  	; PCINT1 Handler 
+	rjmp  	PCINT2  	; PCINT2 Handler 
+	rjmp  	WDT		; Watchdog Timer Handler 
+	rjmp  	TIM2_COMPA 	; Timer2 Compare A Handler 
+	rjmp  	TIM2_COMPB 	; Timer2 Compare B Handler 
+	rjmp  	TIM2_OVF  	; Timer2 Overflow Handler 
+	rjmp  	TIM1_CAPT  	; Timer1 Capture Handler 
+	rjmp  	TIM1_COMPA 	; Timer1 Compare A Handler 
+	rjmp  	TIM1_COMPB 	; Timer1 Compare B Handler 
+	rjmp  	TIM1_OVF 	; Timer1 Overflow Handler 
+	rjmp  	TIM0_COMPA 	; Timer0 Compare A Handler 
+	rjmp  	TIM0_COMPB 	; Timer0 Compare B Handler 
+	rjmp  	TIM0_OVF 	; Timer0 Overflow Handler 
+	rjmp  	SPI_STC  	; SPI Transfer Complete Handler 
+	rjmp  	USART_RXC 	; USART, RX Complete Handler 
+	rjmp  	USART_UDRE 	; USART, UDR Empty Handler 
+	rjmp  	USART_TXC	; USART, TX Complete Handler 
+	rjmp  	ADC	  	; ADC Conversion Complete Handler 
+	rjmp  	EE_RDY  	; EEPROM Ready Handler 
+	rjmp  	ANA_COMP	; Analog Comparator Handler 
+	rjmp  	TWI	  	; 2-wire Serial Interface Handler 
+	rjmp 	SMP_RDY 	; SPM_RDYStore Program Memory Ready 
+#+END_SRC
+
+* Continuation
+The code of the RESET must continue at address 0x20. 
+
+#+BEGIN_SRC asm
+	;; .org 0x20
+#+END_SRC
+
+Declare the RESET label to start the main program.
+
+* Labels needed
+To compile the code correctly with the GNU Assembler, the developer needs to declare the following labels. This code could be copied when there is no need to attend the interruptions or could be used as a template.
+
+#+BEGIN_SRC asm :tangle no
+;; __________________________________________________
+;; Vector Handlers
+	
+EXT_INT0:	; IRQ0 Handler 
+EXT_INT1:	; IRQ1 Handler 
+PCINT0:		; PCINT0 Handler 
+PCINT1:		; PCINT1 Handler 
+PCINT2:		; PCINT2 Handler 
+WDT:		; Watchdog Timer Handler 
+TIM2_COMPA:	; Timer2 Compare A Handler 
+TIM2_COMPB:	; Timer2 Compare B Handler 
+TIM2_OVF:	; Timer2 Overflow Handler 
+TIM1_CAPT:	; Timer1 Capture Handler 
+TIM1_COMPA:	; Timer1 Compare A Handler 
+TIM1_COMPB:	; Timer1 Compare B Handler 
+TIM1_OVF:	; Timer1 Overflow Handler 
+TIM0_COMPA:	; Timer0 Compare A Handler 
+TIM0_COMPB:	; Timer0 Compare B Handler 
+TIM0_OVF:	; Timer0 Overflow Handler 
+SPI_STC:	; SPI Transfer Complete Handler 
+USART_RXC:	; USART, RX Complete Handler 
+USART_UDRE:	; USART, UDR Empty Handler 
+USART_TXC:	; USART, TX Complete Handler 
+ADC:		; ADC Conversion Complete Handler 
+EE_RDY:		; EEPROM Ready Handler 
+ANA_COMP:	; Analog Comparator Handler 
+TWI:		; 2-wire Serial Interface Handler 
+SMP_RDY:	; SPM_RDYStore Program Memory Ready
+
+;; __________________________________________________
+END:
+	nop
+      rjmp END
+#+END_SRC
+
+
+* Meta     :noexport:
+
+  # ----------------------------------------------------------------------
+  #+TITLE:  Vector Include File
+  #+AUTHOR: Christian Gimenez
+  #+DATE:   08 jun 2019
+  #+EMAIL:
+  #+DESCRIPTION: 
+  #+KEYWORDS: 
+
+  #+STARTUP: inlineimages hidestars content hideblocks entitiespretty indent fninline latexpreview
+  #+TODO: TODO(t!) CURRENT(c!) PAUSED(p!) | DONE(d!) CANCELED(C!@)
+  #+OPTIONS:   H:3 num:t toc:t \n:nil @:t ::t |:t ^:{} -:t f:t *:t <:t
+  #+OPTIONS:   TeX:t LaTeX:t skip:nil d:nil todo:t pri:nil tags:not-in-toc tex:imagemagick
+  #+LINK_UP:   
+  #+LINK_HOME: 
+  #+XSLT:
+
+  # -- HTML Export
+  #+INFOJS_OPT: view:info toc:t ftoc:t ltoc:t mouse:underline buttons:t path:libs/org-info.js
+  #+EXPORT_SELECT_TAGS: export
+  #+EXPORT_EXCLUDE_TAGS: noexport
+  #+HTML_LINK_UP: index.html
+  #+HTML_LINK_HOME: index.html
+
+  # -- For ox-twbs or HTML Export
+  #+HTML_HEAD: <link href="libs/bootstrap.min.css" rel="stylesheet">
+  #+HTML_HEAD: <script src="libs/jquery.min.js"></script> 
+  #+HTML_HEAD: <script src="libs/bootstrap.min.js"></script>
+  #+LANGUAGE: en
+
+  # Local Variables:
+  # org-hide-emphasis-markers: t
+  # org-use-sub-superscripts: "{}"
+  # fill-column: 80
+  # visual-line-fringe-indicators: t
+  # ispell-local-dictionary: "british"
+  # End:

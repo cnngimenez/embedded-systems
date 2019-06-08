@@ -1,0 +1,351 @@
+#+PROPERTY: header-args :comments no :padline yes :tangle usart-lib.asm
+
+For sending a value to a computer, a serial connection based on the USART protocol will be used.
+
+This sections describes an assembler file which configure and declare some subroutines for transforming and sending the data to the computer
+
+* License
+#+BEGIN_SRC asm
+;; Copyright 2019 Christian Gimenez
+	   
+;; Author: Christian Gimenez
+
+;; usart-lib.asm
+	   
+;; This program is free software: you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
+	   
+;; This program is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+	   
+;; You should have received a copy of the GNU General Public License
+;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#+END_SRC
+
+* Initialize USART
+Configure the following (register/bits is shown in parenthesis): 
+
+- 9600 baud rate (UBBR).
+- enable the transmitter (UCSRB/TXEN).
+- use the async USART mode (UCSRC/UMSEL).
+- no parity bit (UCSRC/UPM).
+- 1 stop bit for the transmission (UCSRC/USBS).
+- 8 bits of character (UCSRC/UCSZ).
+
+Remember this configuration because the ~minicom~ or ~stty~ will need these. Minicom have to show the ~9600 8N1~ mode.
+
+Declare a label for the USART initialization. Save temporary registers.
+
+#+BEGIN_SRC asm
+USART_INIT:
+    push r16
+    push r17
+#+END_SRC
+
+** Prepare the USART Baud Rate Register UBRR
+Prepare the 9600bps at the USART Baud Rate Register (UBRR). According to the Atmel 328p datasheet, the UBRR value is calculated according to the following formulae: $UBRRn = \frac{f_{osc}}{16 \cdot BAUD} - 1$. The f_{osc} is the frequency of the external timer which in the Arduino UNO is 16MHz. The UBBR value is:
+
+$$UBBR = \frac{f_{osc} }{16 \cdot BAUD} - 1 = \frac{16000000}{16 \cdot 9600} - 1 = 103.166666667$$
+
+#+BEGIN_SRC asm
+    ldi r16, 0
+    ldi r17, 103
+    sts UBRR0H, r16
+    sts UBRR0L, r17
+#+END_SRC
+
+** Set the USART Control and Status Register UCSR
+
+There are three USART Control and Status Register (UCSR). The UCSR A is principally a status control. At the UCSR B, there are two important bits: RXEN and TXEN that enable the transmitter. The UCSR C determines the async mode, the parity bit, the stop bit and the 8 bit character format.
+
+*** Configure UCSR A
+All the bits except TXCn, U2Xn and MPCMn are read-only values. The initial values are the following:
+
+- RXCn :: 0 (Receive Complete)
+- TXCn :: 0 (Transmit Complete)
+- UDREn :: 1 (Data Register Empty)
+- FEn :: 0 (Frame Error)
+- DORn :: 0 (Data OverRun)
+- UPEn :: 0 (USART Parity Error)
+- U2Xn :: 0 (Double the USART transmition speed)
+- MPCMn :: 0 (MultiProcessor Communication Mode)
+
+These values are correct and will not be changed.
+
+*** Configure UCSR B
+The initial values are the following:
+
+- RCXIEn :: 0 (RX Complete Interrupt Enable).
+- TCXIEn :: 0 (TX Complete Interrupt Enable).
+- UDRIEn :: 0 (USART Data Register Empty Interrupt Enable).
+- RXENn :: 0 (Receiver Enable).
+- TXENn :: 0 (Transmitter Enable).
+- UCSZn2 :: 0 (Character Size).
+- RXB8n :: 0 (Received 8th data bit).
+- TXB8n :: 0 (Received 8th data bit).
+
+The following code enables the RXEN and TXEN bits.
+
+#+BEGIN_SRC asm
+    lds r16, UCSR0B
+    set
+    bld r16, 4       ; RXEN0 is 4th bit
+    bld r16, 3       ; TXEN0 is 3rd bit
+    sts UCSR0B, r16
+#+END_SRC
+
+*** Configure UCSR C
+The initial value is the following:
+
+- UMSELn1:0 :: 00 (Async USART mode selected)
+- UPMn1:0 :: 00 (Parity bits disabled)
+- USBSn :: 0 (Stop bit of 1 bit)
+- UCSZn1:0 :: 11 (with UCSRC/UCSZn3 at 0: 8 bits character formats)
+- UCPOL :: 0 (Rising edge polarity)
+
+Then, no value needs to be selected.
+
+** Return from the subroutine
+Restore register used and return from the subroutine.
+
+#+BEGIN_SRC asm
+    pop r17
+    pop r16
+    ret
+#+END_SRC
+
+* Send character
+The following section describe the assembler code for sending a character to the computer. This character must be stored at the r18 register.
+
+Parameters:
+
+- r18 :: the character data to send.
+
+Declare a label to call this subroutine.
+
+#+BEGIN_SRC asm
+USART_PUT:
+#+END_SRC
+
+Save the register to use.
+
+#+BEGIN_SRC asm
+    push r16
+#+END_SRC
+
+
+Wait for the completion of the previous transmission.
+
+#+BEGIN_SRC asm
+1: 
+    lds r16, UCSR0A
+    sbrs r16, 5       ; bit 5 is UDRE
+    rjmp 1b
+#+END_SRC
+
+The data is empty, store the character to send and USART will start sending.
+
+#+BEGIN_SRC asm
+    sts UDR0, r18
+#+END_SRC
+
+Restore registers and return from the subroutine.
+
+#+BEGIN_SRC asm
+    pop r16
+    ret
+#+END_SRC
+
+* Send a string
+The subroutine declared at the section [[*Send character][Send character]] will be used for sending each character.
+
+Parameters:
+
+- X :: 16bit address pointer to the string in SRAM to send.
+
+Registers that will be used (they are saved on the stack):
+
+- r18
+- r19
+
+First, declare a label to call the subroutine.
+
+#+BEGIN_SRC asm
+USART_SEND:
+#+END_SRC
+
+Save the register that are used.
+
+#+BEGIN_SRC asm
+    push r18
+    push r19
+#+END_SRC
+
+Get one character from the X register parameter and increment 1.
+
+#+BEGIN_SRC asm
+1:
+    ld r18, X+
+#+END_SRC
+
+Check if the character is zero, and if it is, return from the subroutine. The Z bit at the Status Register (SREG) is 1 when the comparison with ~cpi~ is true. ~cpi Rd, k~ applies the substraction ~Rd - k~ without saving the result but changing the Z, N, V, C and H bits at SREG accordingly. ~tst Rd~ could be used but  the result goes to the same Rd register losing the character if it is not zero.
+The ~sbrc SREG, 1~ instruction will skip the next line if the Z bit is cleared (~Rd - k~ is not zero and thus, they are different).
+
+#+BEGIN_SRC asm
+    cpi r18, 0      ; Z = 1 if r18 - 0 = 0
+    lds r19, SREG
+    sbrc r19, 1    ; 1 is Z bit 
+    rjmp 2f             ; if r18 is 0 (Z = 0) then return subroutine
+#+END_SRC
+
+The character is not zero, send it.
+
+#+BEGIN_SRC asm
+    call USART_PUT
+#+END_SRC
+
+Do the process again.
+
+#+BEGIN_SRC asm
+    rjmp 1b
+#+END_SRC
+   
+Return part. First restore register and return.
+
+#+BEGIN_SRC asm
+2:
+    pop r19
+    pop r18
+    ret 
+#+END_SRC
+
+* Send an unsigned integer
+Cast the X 16bit unsigned integer into string and send it through USART.
+
+Parameters:
+
+- X registers :: The number in hex to print. Data will be lost.
+
+Declare the subroutine and save "local" registers.
+
+#+BEGIN_SRC asm
+USART_HEX:
+    push r16
+    push r17
+    push r18
+    push r19
+#+END_SRC
+
+Initialize counter.
+
+#+BEGIN_SRC asm
+    ldi r19, 0b1111
+#+END_SRC
+
+First, make a copy of XH and keep with the four last bits. 
+
+#+BEGIN_SRC asm
+1:
+    mov r16, XH
+    lsr r16
+    lsr r16
+    lsr r16
+    lsr r16
+#+END_SRC
+
+Check if it is a number between 0x1 to 0x9.
+
+#+BEGIN_SRC asm
+    cpi r16, 0x0a
+    brlo 2f
+    ;; It is a digit between 0x0a to 0x0f
+    subi r16, 0x0a
+    ldi r17, 65     ;; 65 is ASCII for "A"
+    add r16, r17
+    mov r18, r16
+    rcall USART_PUT    
+    rjmp 3f
+2: 
+    ;; It is a number between 0x01 to 0x09
+    ldi r17, 48     ;; 48 is ASCII for "0"
+    add r16, r17
+    mov r18, r16
+    rcall USART_PUT
+    rjmp 3f
+#+END_SRC
+
+
+Remove the last four bits already printed in hex and check if all bits in XH are is zero. If they are, use XL as XH.
+
+#+BEGIN_SRC asm
+3:
+    lsr r19 ;; reduce one bit from the counter
+
+    lsl XH
+    lsl XH
+    lsl XH
+    lsl XH
+
+    cpi r19, 0b0000
+    breq 4f  ;; r19 counter is zero, return.
+
+    cpi r19, 0b0011
+    brne 1b  ;; r19 counter is working!
+
+    ;; counter is 0b0011: work with XL
+    mov XH, XL
+    rjmp 1b
+
+4:
+    ;; XL and XH is 0x00! return!
+    pop r19
+    pop r18
+    pop r17
+    pop r16
+    ret
+#+END_SRC
+
+
+
+* Meta     :noexport:
+
+  # ----------------------------------------------------------------------
+  #+TITLE:  USART Library
+  #+AUTHOR: Christian Gimenez
+  #+DATE:   08 jun 2019
+  #+EMAIL:
+  #+DESCRIPTION: 
+  #+KEYWORDS: 
+
+  #+STARTUP: inlineimages hidestars content hideblocks entitiespretty indent fninline latexpreview
+  #+TODO: TODO(t!) CURRENT(c!) PAUSED(p!) | DONE(d!) CANCELED(C!@)
+  #+OPTIONS:   H:3 num:t toc:t \n:nil @:t ::t |:t ^:{} -:t f:t *:t <:t
+  #+OPTIONS:   TeX:t LaTeX:t skip:nil d:nil todo:t pri:nil tags:not-in-toc tex:imagemagick
+  #+LINK_UP:   
+  #+LINK_HOME: 
+  #+XSLT:
+
+  # -- HTML Export
+  #+INFOJS_OPT: view:info toc:t ftoc:t ltoc:t mouse:underline buttons:t path:libs/org-info.js
+  #+EXPORT_SELECT_TAGS: export
+  #+EXPORT_EXCLUDE_TAGS: noexport
+  #+HTML_LINK_UP: ../index.html
+  #+HTML_LINK_HOME: ../index.html
+
+  # -- For ox-twbs or HTML Export
+  #+HTML_HEAD: <link href="libs/bootstrap.min.css" rel="stylesheet">
+  #+HTML_HEAD: <script src="libs/jquery.min.js"></script> 
+  #+HTML_HEAD: <script src="libs/bootstrap.min.js"></script>
+  #+LANGUAGE: en
+
+  # Local Variables:
+  # org-hide-emphasis-markers: t
+  # org-use-sub-superscripts: "{}"
+  # fill-column: 80
+  # visual-line-fringe-indicators: t
+  # ispell-local-dictionary: "british"
+  # End:

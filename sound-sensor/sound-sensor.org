@@ -1,0 +1,701 @@
+
+* Get Sound Data
+:PROPERTIES:
+:header-args: :comments no :padline yes :tangle main.asm 
+:END:
+
+There are three important registers for the ADC:
+
+- ADMUX :: Input selection or "multiplexor"
+- ADCSRA :: Status and control
+- ADC :: Data registers
+
+** Include needed files
+#+BEGIN_SRC asm
+.include "vectors.asm"
+.include "registers.asm"
+#+END_SRC
+
+** Static data
+
+This section is for read only data.
+
+#+BEGIN_SRC asm
+.section .rodata
+#+END_SRC
+
+*** Some data to test the USART
+This is a "hello" that will be sendend through the USART.
+
+Important: The address ~.SDhello~ assigned by GNU Assembler will depend on the linker parameters. The ~-Tdata=0x800100~ will indicate that the start of data will be at the 0x0100 address of the SRAM. Atmel 328p datasheet designates that the SRAM has registers mapped from 0x0000 to 0x00ff, so assign ~.SDhello~ must be assigned to start at 0x0100 minimum.
+
+#+BEGIN_SRC asm
+.SDhello:
+    .string "hello "
+#+END_SRC
+
+** Start code of the program
+#+BEGIN_SRC asm
+.text
+
+RESET:
+#+END_SRC
+
+** Copy the string constant to data memory
+String constants are at the program memory (0x0000 address in the program memory is not the same as 0x0000 at the SRAM!).
+
+This copy all the string into SRAM.
+
+#+BEGIN_SRC asm
+  ldi ZL, lo8(STATIC_DATA)
+  ldi ZH, hi8(STATIC_DATA)
+  
+  ldi XL, lo8(.SDhello)
+  ldi XH, hi8(.SDhello)
+
+1:
+  lpm r16, Z+       ; get program data
+  cpi r16, 0x0
+  breq CONT_PROGRAM       ; r16 has zero! end string copy
+
+  st X+, r16       ; store at SRAM
+  rjmp 1b       ; next
+#+END_SRC
+
+
+#+BEGIN_SRC asm
+CONT_PROGRAM: 
+  st X+, r16   ; store the zero char
+#+END_SRC
+
+
+** Initialize the USART library
+Call the init subroutine.
+
+#+BEGIN_SRC asm
+  call USART_INIT
+#+END_SRC
+
+Test for the library: 
+
+Test sending a "hello". Take the pointer from the string memory and send it to the USART_SEND subroutine.
+
+#+BEGIN_SRC asm
+  ldi XL, lo8(.SDhello)
+  ldi XH, hi8(.SDhello)
+  call USART_SEND
+
+  ldi XL, 0X23
+  ldi XH, 0Xaf
+  call USART_HEX
+#+END_SRC
+
+** Configure ADC
+
+*** Configure the input selection ADMUX
+
+   The ADMUX register is located at 0x7C in ATMEL 328p. It has the following format:
+
+   |-------+-------+-------+---+------+------+------+------|
+   | REFS1 | REFS0 | ADLAR | - | MUX3 | MUX2 | MUX1 | MUX0 |
+   |-------+-------+-------+---+------+------+------+------|
+
+   All of these bits are RW except for the reserved one. And all of them has the initial value as 0.
+
+   - REFS :: Reference Selection.
+   - ADLAR :: ADC Left Adjust Result
+   - MUX :: Analog Channel Selection.
+
+**** Voltage Reference Configuration
+
+   The ADC requires a voltage as reference. There are three possible options:
+
+   |-------+-------+---------------------------------------------------------------------|
+   | REFS1 | REFS0 | Voltage Reference Selection                                         |
+   |-------+-------+---------------------------------------------------------------------|
+   |     0 |     0 | AREF, Internal Vref turned off                                      |
+   |     0 |     1 | AVcc with external capacitor at AREF pin                            |
+   |     1 |     0 | Reserved                                                            |
+   |     1 |     1 | Internal 1.1V voltage reference with external capacitor at AREF pin |
+   |-------+-------+---------------------------------------------------------------------|
+
+   According to the Arduino UNO Schematic, (see Figure ref:fig:aref-capacitor)
+   there is a 100nF capacitor connected to the AREF pin which is required to reduce the noise. If REFS is setted with any of the modes, then, there is no need to use any other capacitor.
+
+   #+caption: Schematic section that shows the capacitor attached to the AREF pin. label:fig:aref-capacitor
+   [[file:aref-capacitor.png]]
+
+   Which value is best? Sensors may work with different voltages, and maybe not 1.1V. Thus, test the voltage output at the analog of the sensor and try to make a huge noise to see which is the maximum wanted. Take note of voltages for minimum and maximum and use that as input for AREF.
+
+   For the sound module, the voltage is 3V when the ambient is tranquil. For this reason, a 3V or 5V in the AREF will work. Setting REFS1:0 at ~01~ for using the Arduino capacitor will work properly (tested with the MQ3 alcoholimeter and with 3.3V in AREF too!).
+
+#+BEGIN_SRC asm
+  lds r16, ADMUX
+  clt
+  bld r16, 7      ; 7 bit is REFS1
+  set
+  bld r16, 6      ; 7 bit is REFS0
+  sts ADMUX, r16
+#+END_SRC
+
+**** Input Channel Configuration
+
+The MUX bits configure which ADCn channel to use. ADC0 to 5 is connected in order to the AD1 to 6 of the Arduino board. Convert the binary number of these bits into decimal to know which ADCn channel is used.
+
+If MUX bits are setted to 1110 or 1111 the input values will be fixed at  1.1V (V_{BG}) or 0V (GND). Useful for testing purposes. If used, remember to set the REFs bits to 1.1V reference voltage (REF1 and REF0 to values 11).
+
+In this case, *the channel 2 is will be used*. MUX will be configured to 0010:
+
+#+BEGIN_SRC asm
+  lds r16, ADMUX
+  clt
+  bld r16, 0      ; bit 0 is MUX0
+  set
+  bld r16, 1      ; bit 1 is MUX1
+  clt
+  bld r16, 2      ; MUX2
+  bld r16, 3	; MUX3
+  sts ADMUX, r16
+#+END_SRC
+
+For testing purposes, the input channel can be 1111 to send a 0V using this code. The resulting value at the ADC data register must be 0x00.
+
+#+BEGIN_SRC asm :tangle no
+  lds r16, ADMUX
+  set
+  bld r16, 0
+  bld r16, 1
+  bld r16, 2
+  bld r16, 3
+  sts ADMUX, r16
+#+END_SRC
+
+Another possibility is to use the input channel at 1110 that means to send a 1.1V. The resulting value at the ADC data register must be 0x3f.
+
+#+BEGIN_SRC asm :tangle no
+  lds r16, ADMUX
+  clt 
+  bld r16, 0
+  set
+  bld r16, 1
+  bld r16, 2
+  bld r16, 3
+  sts ADMUX, r16
+#+END_SRC
+
+
+**** Right ajusted result
+There is no need to adjust the result to the left. This is interesting when only one byte of the result is needed because the the ADC has to be red carefully.
+
+Once the ADCL is red, the ADC registers blocks to ensure that the ADCH bits correponds to the same reading. After reading the ADCH, the registers will unlock and a new reading can be written on them. If a new reading interrupt the reading between ADCL and ADCH, this blocking mechanism will not allow it to be stored preserving the ADCH previous value and the circuit will lose the new one.
+
+For right ajusted result, the ADLAR bit must be at 0.
+
+*** Configure the control and status register ADCSRA
+
+The ARC Control and Status Register A (ADCSRA) is located at the 0x7A memory address in the Atmel 328p processor. This register has the following format:
+
+|------+------+-------+------+------+-------+-------+-------|
+| ADEN | ADSC | ADATE | ADIF | ADIE | ADPS2 | ADPS1 | ADPS0 |
+|------+------+-------+------+------+-------+-------+-------|
+
+All the bits are initialized at zero and are readable and writable.
+
+- ADEN :: ADC Enable.
+- ADSC :: ADC Start Conversion.
+- ADATE :: ADC Auto Trigger Enable.
+- ADIF :: ADC Interrupt Flag.
+- ADIE :: ADC Interrupt Enable.
+- ADPS :: ADC Prescaler Select bits.
+   
+There are two task that is needed: set the prescaler to a suitable value according to the ADC clock cicle and to enable the ADC.
+
+**** Set the prescaler
+The prescaler is the division factor between the external clock frequency and the ADC clock to the ADC. According to the Atmel 328p datasheet, the ADC clock works between 50kHz and 200kHz. The external clock at the Arduino board works 16MHz. If the external clock is replaced by another this prescalar must be reconfigured.
+
+
+16MHz is 16000000 cicles per seconds wich means each cicle will take 62.5 nanoseconds  ($\frac{1000000000ns}{16000000c} = \frac{1000}{16} = \frac{62.5ns}{1c}$). 200kHz is 200000 cicles per seconds which means that each ADC cicle will take 5000 nanoseconds ($\frac{1000000000ns}{200000c} = \frac{10000}{2} = 5000ns$). The diference between them is $\frac{16000000}{200000} = \frac{80}{1}$. This means that for each 80 cicles of external clock there is 1 cicle for ADC.
+
+13 ADC cicles are needed for each reading.  Then, 13 ADC cicles takes $5\mu{}s \cdot 13 = 65\mu{}s$. Also, 25 ADC cicles are needed for the first reading. Considering the same ADC cicle time, then $25 \cdot 5\mu{}s = 125\mu{}s$. 
+
+The prescaler is important when asking for values continuously (when ADATE bit is enabled). The sample reading and holding value is done between the first cicle rising edge and the second cicle fall edge after the prescaling ends. The rest of the cicles are used for decoding the value into a digital number. The next value is retrieved again at the end of the next prescaler cicle meaning that each reading value iteration is controlled by the external clock.
+
+
+The prescaler value must be 2, 4, 8, 16, 32, 64 or 128. Considering that 80 cicles from the external clock is needed for retrieving one cicle, it means that *a 128 value is needed* (1 prescaled cicle per 128 external clock cicles). $128 - 80 = 48$ cicles will not be used by any task referred to the ADC.
+
+According to the Atmel 328p datasheet, ADPS2:0 must have the value 111 for a prescaler value of 128.
+
+#+BEGIN_SRC asm
+  lds r16, ADCSRA
+  set
+  bld r16, 2       ; ADPS2
+  bld r16, 1       ; ADPS1
+  bld r16, 0       ; ADPS0
+  sts ADCSRA, r16
+#+END_SRC
+
+**** Set the auto trigger
+To read values continuously, the auto trigger must be enabled.
+
+#+BEGIN_SRC asm
+  lds r16, ADCSRA
+  set
+  bld r16, 5       ; 5th bit is ADATE
+  sts ADCSRA, r16
+#+END_SRC
+
+
+** Reading loop
+
+Declare a label for reapeating the loop and initialize registers that will store the data. 
+
+#+BEGIN_SRC asm
+MAIN_LOOP:
+  ldi r17, 0
+#+END_SRC
+
+Enable the ADC and start a conversion.
+
+#+BEGIN_SRC asm
+  lds r16, ADCSRA
+  set
+  bld r16, 7
+  bld r16, 6       ; 6th bit is ADSC
+  sts ADCSRA, r16
+#+END_SRC
+
+Wait until an ADC value is ready.
+
+#+BEGIN_SRC asm
+1:
+  lds r16, ADCSRA
+  sbrs r16, 4       ; 4th bit is ADIF
+  rjmp 1b
+#+END_SRC
+
+Read the value from the ADC. The order is important because the ADC data registers blocks once it start reading the ADCL. This is in case of a new reading interrupt happens after reading ADCL. If there is no blocking mechanism, when reading the ADCH it is not possible to ensure if it corresponds to the ADCL readed.
+
+The register X is used as parameter for the USART_HEX subroutine at the USART library. 
+
+#+BEGIN_SRC asm
+  lds XL, ADCL
+  lds XH, ADCH
+#+END_SRC
+
+Now, send the value as character through USART serial protocol.
+
+#+BEGIN_SRC asm    
+  ldi r18, 10       ;; 13 is line feed in ASCII
+  call USART_PUT
+  ldi r18, 13       ;; 13 is carriage return in ASCII
+  call USART_PUT
+  call USART_HEX
+#+END_SRC
+
+A wait call, so the program won't saturate the user's reading.
+
+#+BEGIN_SRC asm
+  call WAIT
+#+END_SRC
+
+Repeat the loop.
+
+#+BEGIN_SRC asm
+  rjmp MAIN_LOOP
+#+END_SRC
+
+
+** Include needed libraries
+
+Include the USART library explained at section [[*Send data by USART][Send data by USART]].
+
+#+BEGIN_SRC asm
+.include "usart.asm"
+#+END_SRC
+
+Include the wait library which imports a command for waiting.
+
+#+BEGIN_SRC asm
+.include "wait.asm"
+#+END_SRC
+
+
+** Vector Table
+
+#+BEGIN_SRC asm
+;; __________________________________________________
+	;; Vector Handlers
+	
+EXT_INT0:	; IRQ0 Handler 
+EXT_INT1:	; IRQ1 Handler 
+PCINT0:		; PCINT0 Handler 
+PCINT1:		; PCINT1 Handler 
+PCINT2:		; PCINT2 Handler 
+WDT:		; Watchdog Timer Handler 
+TIM2_COMPA:	; Timer2 Compare A Handler 
+TIM2_COMPB:	; Timer2 Compare B Handler 
+TIM2_OVF:	; Timer2 Overflow Handler 
+TIM1_CAPT:	; Timer1 Capture Handler 
+TIM1_COMPA:	; Timer1 Compare A Handler 
+TIM1_COMPB:	; Timer1 Compare B Handler 
+TIM1_OVF:	; Timer1 Overflow Handler 
+TIM0_COMPA:	; Timer0 Compare A Handler 
+TIM0_COMPB:	; Timer0 Compare B Handler 
+TIM0_OVF:	; Timer0 Overflow Handler 
+SPI_STC:	; SPI Transfer Complete Handler 
+USART_RXC:	; USART, RX Complete Handler 
+USART_UDRE:	; USART, UDR Empty Handler 
+USART_TXC:	; USART, TX Complete Handler 
+ADC:		; ADC Conversion Complete Handler 
+EE_RDY:		; EEPROM Ready Handler 
+ANA_COMP:	; Analog Comparator Handler 
+TWI:		; 2-wire Serial Interface Handler 
+SMP_RDY:	; SPM_RDYStore Program Memory Ready
+
+;; __________________________________________________
+END:
+	nop
+    ;; break
+    sleep
+    rjmp END
+#+END_SRC
+
+Reference to the static data. The assembler store them at the end.
+
+#+BEGIN_SRC asm
+STATIC_DATA:
+#+END_SRC
+
+
+
+* Send data by USART
+:PROPERTIES:
+:header-args: :comments no :padline yes :tangle usart.asm
+:END:
+
+For sending the sensed value to a computer, a serial connection based on the USART protocol will be used.
+
+This sections describes a new assembler file which configure and declare some subroutines for transforming and sending the data to the computer
+
+** Initialize USART
+Configure the following (register/bits is shown in parenthesis): 
+
+- 9600 baud rate (UBBR).
+- enable the transmitter (UCSRB/TXEN).
+- use the async USART mode (UCSRC/UMSEL).
+- no parity bit (UCSRC/UPM).
+- 1 stop bit for the transmission (UCSRC/USBS).
+- 8 bits of character (UCSRC/UCSZ).
+
+Remember this configuration because the ~minicom~ or ~stty~ will need these. Minicom have to show the ~9600 8N1~ mode.
+
+Declare a label for the USART initialization. Save temporary registers.
+
+#+BEGIN_SRC asm
+USART_INIT:
+    push r16
+    push r17
+#+END_SRC
+
+*** Prepare the USART Baud Rate Register UBRR
+Prepare the 9600bps at the USART Baud Rate Register (UBRR). According to the Atmel 328p datasheet, the UBRR value is calculated according to the following formulae: $UBRRn = \frac{f_{osc}}{16 \cdot BAUD} - 1$. The f_{osc} is the frequency of the external timer which in the Arduino UNO is 16MHz. The UBBR value is:
+
+$$UBBR = \frac{f_{osc} }{16 \cdot BAUD} - 1 = \frac{16000000}{16 \cdot 9600} - 1 = 103.166666667$$
+
+#+BEGIN_SRC asm
+    ldi r16, 0
+    ldi r17, 103
+    sts UBRR0H, r16
+    sts UBRR0L, r17
+#+END_SRC
+
+*** Set the USART Control and Status Register UCSR
+
+There are three USART Control and Status Register (UCSR). The UCSR A is principally a status control. At the UCSR B, there are two important bits: RXEN and TXEN that enable the transmitter. The UCSR C determines the async mode, the parity bit, the stop bit and the 8 bit character format.
+
+**** Configure UCSR A
+All the bits except TXCn, U2Xn and MPCMn are read-only values. The initial values are the following:
+
+- RXCn :: 0 (Receive Complete)
+- TXCn :: 0 (Transmit Complete)
+- UDREn :: 1 (Data Register Empty)
+- FEn :: 0 (Frame Error)
+- DORn :: 0 (Data OverRun)
+- UPEn :: 0 (USART Parity Error)
+- U2Xn :: 0 (Double the USART transmition speed)
+- MPCMn :: 0 (MultiProcessor Communication Mode)
+
+These values are correct and will not be changed.
+
+**** Configure UCSR B
+The initial values are the following:
+
+- RCXIEn :: 0 (RX Complete Interrupt Enable).
+- TCXIEn :: 0 (TX Complete Interrupt Enable).
+- UDRIEn :: 0 (USART Data Register Empty Interrupt Enable).
+- RXENn :: 0 (Receiver Enable).
+- TXENn :: 0 (Transmitter Enable).
+- UCSZn2 :: 0 (Character Size).
+- RXB8n :: 0 (Received 8th data bit).
+- TXB8n :: 0 (Received 8th data bit).
+
+The following code enables the RXEN and TXEN bits.
+
+#+BEGIN_SRC asm
+    lds r16, UCSR0B
+    set
+    bld r16, 4       ; RXEN0 is 4th bit
+    bld r16, 3       ; TXEN0 is 3rd bit
+    sts UCSR0B, r16
+#+END_SRC
+
+**** Configure UCSR C
+The initial value is the following:
+
+- UMSELn1:0 :: 00 (Async USART mode selected)
+- UPMn1:0 :: 00 (Parity bits disabled)
+- USBSn :: 0 (Stop bit of 1 bit)
+- UCSZn1:0 :: 11 (with UCSRC/UCSZn3 at 0: 8 bits character formats)
+- UCPOL :: 0 (Rising edge polarity)
+
+Then, no value needs to be selected.
+
+*** Return from the subroutine
+Restore register used and return from the subroutine.
+
+#+BEGIN_SRC asm
+    pop r17
+    pop r16
+    ret
+#+END_SRC
+
+** Send character
+The following section describe the assembler code for sending a character to the computer. This character must be stored at the r18 register.
+
+Parameters:
+
+- r18 :: the character data to send.
+
+Declare a label to call this subroutine.
+
+#+BEGIN_SRC asm
+USART_PUT:
+#+END_SRC
+
+Save the register to use.
+
+#+BEGIN_SRC asm
+    push r16
+#+END_SRC
+
+
+Wait for the completion of the previous transmission.
+
+#+BEGIN_SRC asm
+1: 
+    lds r16, UCSR0A
+    sbrs r16, 5       ; bit 5 is UDRE
+    rjmp 1b
+#+END_SRC
+
+The data is empty, store the character to send and USART will start sending.
+
+#+BEGIN_SRC asm
+    sts UDR0, r18
+#+END_SRC
+
+Restore registers and return from the subroutine.
+
+#+BEGIN_SRC asm
+    pop r16
+    ret
+#+END_SRC
+
+** Send a string
+The subroutine declared at the section [[*Send character][Send character]] will be used for sending each character.
+
+Parameters:
+
+- X :: 16bit address pointer to the string in SRAM to send.
+
+Registers that will be used (they are saved on the stack):
+
+- r18
+- r19
+
+First, declare a label to call the subroutine.
+
+#+BEGIN_SRC asm
+USART_SEND:
+#+END_SRC
+
+Save the register that are used.
+
+#+BEGIN_SRC asm
+    push r18
+    push r19
+#+END_SRC
+
+Get one character from the X register parameter and increment 1.
+
+#+BEGIN_SRC asm
+1:
+    ld r18, X+
+#+END_SRC
+
+Check if the character is zero, and if it is, return from the subroutine. The Z bit at the Status Register (SREG) is 1 when the comparison with ~cpi~ is true. ~cpi Rd, k~ applies the substraction ~Rd - k~ without saving the result but changing the Z, N, V, C and H bits at SREG accordingly. ~tst Rd~ could be used but  the result goes to the same Rd register losing the character if it is not zero.
+The ~sbrc SREG, 1~ instruction will skip the next line if the Z bit is cleared (~Rd - k~ is not zero and thus, they are different).
+
+#+BEGIN_SRC asm
+    cpi r18, 0      ; Z = 1 if r18 - 0 = 0
+    lds r19, SREG
+    sbrc r19, 1    ; 1 is Z bit 
+    rjmp 2f             ; if r18 is 0 (Z = 0) then return subroutine
+#+END_SRC
+
+The character is not zero, send it.
+
+#+BEGIN_SRC asm
+    call USART_PUT
+#+END_SRC
+
+Do the process again.
+
+#+BEGIN_SRC asm
+    rjmp 1b
+#+END_SRC
+   
+Return part. First restore register and return.
+
+#+BEGIN_SRC asm
+2:
+    pop r19
+    pop r18
+    ret 
+#+END_SRC
+
+** Send an unsigned integer
+This section explains how to cast a 16bit unsigned integer into string and send it through USART.
+
+Parameters:
+
+- X registers :: The number in hex to print.
+
+Declare the subroutine and save "local" registers.
+
+#+BEGIN_SRC asm
+USART_HEX:
+    push r16
+    push r17
+    push r18
+    push r19
+#+END_SRC
+
+Initialize counter.
+
+#+BEGIN_SRC asm
+    ldi r19, 0b1111
+#+END_SRC
+
+First, make a copy of XH and keep with the four last bits. 
+
+#+BEGIN_SRC asm
+1:
+    mov r16, XH
+    lsr r16
+    lsr r16
+    lsr r16
+    lsr r16
+#+END_SRC
+
+Check if it is a number between 0x1 to 0x9.
+
+#+BEGIN_SRC asm
+    cpi r16, 0x0a
+    brlo 2f
+    ;; It is a digit between 0x0a to 0x0f
+    subi r16, 0x0a
+    ldi r17, 65     ;; 65 is ASCII for "A"
+    add r16, r17
+    mov r18, r16
+    rcall USART_PUT    
+    rjmp 3f
+2: 
+    ;; It is a number between 0x01 to 0x09
+    ldi r17, 48     ;; 48 is ASCII for "0"
+    add r16, r17
+    mov r18, r16
+    rcall USART_PUT
+    rjmp 3f
+#+END_SRC
+
+
+Remove the last four bits already printed in hex and check if all bits in XH are is zero. If they are, use XL as XH.
+
+#+BEGIN_SRC asm
+3:
+    lsr r19 ;; reduce one bit from the counter
+
+    lsl XH
+    lsl XH
+    lsl XH
+    lsl XH
+
+    cpi r19, 0b0000
+    breq 4f  ;; r19 counter is zero, return.
+
+    cpi r19, 0b0011
+    brne 1b  ;; r19 counter is working!
+
+    ;; counter is 0b0011: work with XL
+    mov XH, XL
+    rjmp 1b
+
+4:
+    ;; XL and XH is 0x00! return!
+    pop r19
+    pop r18
+    pop r17
+    pop r16
+    ret
+#+END_SRC
+
+
+* Meta     :noexport:
+
+  # ----------------------------------------------------------------------
+  #+TITLE:  Sound Sensor
+  #+AUTHOR: Christian Gimenez
+  #+DATE:   06 jun 2019
+  #+EMAIL:
+  #+DESCRIPTION: 
+  #+KEYWORDS: 
+
+  #+STARTUP: inlineimages hidestars content hideblocks entitiespretty indent fninline latexpreview
+  #+TODO: TODO(t!) CURRENT(c!) PAUSED(p!) | DONE(d!) CANCELED(C!@)
+  #+OPTIONS:   H:3 num:t toc:t \n:nil @:t ::t |:t ^:{} -:t f:t *:t <:t
+  #+OPTIONS:   TeX:t LaTeX:t skip:nil d:nil todo:t pri:nil tags:not-in-toc tex:imagemagick
+  #+LINK_UP:   
+  #+LINK_HOME: 
+  #+XSLT:
+
+  # -- HTML Export
+  #+INFOJS_OPT: view:info toc:t ftoc:t ltoc:t mouse:underline buttons:t path:libs/org-info.js
+  #+EXPORT_SELECT_TAGS: export
+  #+EXPORT_EXCLUDE_TAGS: noexport
+  #+HTML_LINK_UP: ../index.html
+  #+HTML_LINK_HOME: ../index.html
+
+  # -- For ox-twbs or HTML Export
+  #+HTML_HEAD: <link href="../libs/bootstrap.min.css" rel="stylesheet">
+  #+HTML_HEAD: <script src="../libs/jquery.min.js"></script> 
+  #+HTML_HEAD: <script src="../libs/bootstrap.min.js"></script>
+  #+LANGUAGE: en
+
+  # Local Variables:
+  # org-hide-emphasis-markers: t
+  # org-use-sub-superscripts: "{}"
+  # fill-column: 80
+  # visual-line-fringe-indicators: t
+  # ispell-local-dictionary: "british"
+  # End:

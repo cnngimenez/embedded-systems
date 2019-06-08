@@ -1,0 +1,164 @@
+#+PROPERTY: header-args :tangle wait-lib.asm :padline yes :comments no
+
+This subroutine use three register to count operations. The base idea is to make the CPU idle by executing ~nop~ instructions.
+
+Parameters:
+
+- r16 :: A number from 0x01 to 0xff. This will count from 0x000000 to 0xXXffff where XX is given by this parameter.
+
+Register used: r17, r18, r19.
+All register are saved on the stack.
+
+The register r17 will count from 0 to 255, the r18 will help on counting up to 65535 and r19 up to 16777215 (0x00ffffff). However, counting up to 9000000 cicles (i.e. let's say 0x80ffff or 8454143 in decimal) at least will be enough (multiplied by the amount of instructiens needed for the operation and by the ~nop~ instructions).
+
+* License
+#+BEGIN_SRC asm
+;; Copyright 2019 Christian Gimenez
+	   
+;; Author: Christian Gimenez
+
+;; wait-lib.asm
+	   
+;; This program is free software: you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
+	   
+;; This program is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+	   
+;; You should have received a copy of the GNU General Public License
+;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#+END_SRC
+
+* Declare the subroutine
+Declare the WAIT function and save the register that will be used locally.
+
+#+BEGIN_SRC asm
+	;; Registers used:
+	;; r17, r18, r19
+WAIT:
+    push r17
+    push r18
+    push r19
+#+END_SRC
+
+* Initialize registers
+
+Supposedly, the following register must be saved in memory. This saves the date in case of the main routine uses them. In this case, these registers were not used in the main program and use it directly.
+
+Zero the needed registers.
+
+#+BEGIN_SRC asm
+	ldi r17, 0
+	ldi r18, 0
+	ldi r19, 0
+#+END_SRC
+
+* First loop
+This first loop will increment the r17 from 0x00 to 0xff.
+
+To begin with, some ~nop~ instructions for giving more time.
+
+#+BEGIN_SRC asm
+1:
+	nop
+	nop
+	nop
+	nop
+	nop
+#+END_SRC
+
+Increment the register by one and compare if it reached 0xff. If it reaches the amount, then branch to increment the r18 register, else continue looping.
+
+#+BEGIN_SRC asm
+	inc r17
+	cpi r17, 0xff
+	breq 2f
+
+	rjmp 1b
+#+END_SRC
+ 
+* Second part
+Reset the r17 to zero for starting the first loop again.
+
+#+BEGIN_SRC asm
+2:
+	;; check if the high value is UPPER
+	ldi r17, 0
+#+END_SRC
+
+Increment r18 and check if reached 0xff. If it reaches then increment the r19, if not restore the first loop sequence.
+
+#+BEGIN_SRC asm
+	inc r18
+	cpi r18, 0xff
+	brne 1b
+#+END_SRC
+
+* Third part
+Same as the second part, reset the r18.
+
+#+BEGIN_SRC asm
+3:
+	ldi r18, 0
+#+END_SRC
+
+Increment r19 and check if reached the desired amount, if not continue the loop, else return from the subroutine.
+
+#+BEGIN_SRC asm
+	inc r19
+	cp r19, r16
+	brne 1b
+#+END_SRC
+
+* Return the subroutine
+Restore the registers and return.
+
+#+BEGIN_SRC asm
+      pop r19
+      pop r18
+      pop r17
+	ret			; UPPER waiting limit achieved
+#+END_SRC
+
+* Meta     :noexport:
+
+  # ----------------------------------------------------------------------
+  #+TITLE:  Wait Library
+  #+AUTHOR: Christian Gimenez
+  #+DATE:   08 jun 2019
+  #+EMAIL:
+  #+DESCRIPTION: 
+  #+KEYWORDS: 
+
+  #+STARTUP: inlineimages hidestars content hideblocks entitiespretty indent fninline latexpreview
+  #+TODO: TODO(t!) CURRENT(c!) PAUSED(p!) | DONE(d!) CANCELED(C!@)
+  #+OPTIONS:   H:3 num:t toc:t \n:nil @:t ::t |:t ^:{} -:t f:t *:t <:t
+  #+OPTIONS:   TeX:t LaTeX:t skip:nil d:nil todo:t pri:nil tags:not-in-toc tex:imagemagick
+  #+LINK_UP:   
+  #+LINK_HOME: 
+  #+XSLT:
+
+  # -- HTML Export
+  #+INFOJS_OPT: view:info toc:t ftoc:t ltoc:t mouse:underline buttons:t path:libs/org-info.js
+  #+EXPORT_SELECT_TAGS: export
+  #+EXPORT_EXCLUDE_TAGS: noexport
+  #+HTML_LINK_UP: index.html
+  #+HTML_LINK_HOME: index.html
+
+  # -- For ox-twbs or HTML Export
+  #+HTML_HEAD: <link href="libs/bootstrap.min.css" rel="stylesheet">
+  #+HTML_HEAD: <script src="libs/jquery.min.js"></script> 
+  #+HTML_HEAD: <script src="libs/bootstrap.min.js"></script>
+  #+LANGUAGE: en
+
+  # Local Variables:
+  # org-hide-emphasis-markers: t
+  # org-use-sub-superscripts: "{}"
+  # fill-column: 80
+  # visual-line-fringe-indicators: t
+  # ispell-local-dictionary: "british"
+  # End:

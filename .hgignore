@@ -1,0 +1,10 @@
+syntax: regexp
+.*\.gdb_history
+.*\ltx.*
+.*\~
+.*\#
+.*\.o$
+.*\.elf$
+.*\.hex$
+theindex\.*
+sitemap.*

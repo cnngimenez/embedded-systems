@@ -1,0 +1,342 @@
+#+PROPERTY: header-args :comments no :padline yes :tangle main.asm :mkdirp yes
+
+Important registers:
+
+- UDR :: USART Data Register.
+- UBRR :: Configure the Baud Rate. 2 Registers.
+- UCSR :: Configure the mode. 3 registers.
+
+* Include needed files
+#+BEGIN_SRC asm
+.include "../libraries/vector-inc.asm"
+.include "../libraries/registers-inc.asm"
+
+.text
+
+RESET:
+#+END_SRC
+
+* Configure Ouput LED 
+The L led will be used for displaying if something is sended or other debugging purposes.
+
+Activate this led (which is the fifth in PORTB). In Arduino UNO schematics, the PB5 is also linked with the 6th pin on the board.
+
+#+BEGIN_SRC asm
+    sbi ODDRB, 5
+#+END_SRC
+
+* Configure UART registers
+
+UART Register are:
+
+- UDR0 :: USART Data Register 0, where the receiver and transmitter store the information.
+- UBRR0 :: Two 8bit register for configuring the baud rate.
+- UCSR0 :: Three registers for configuring the mode.
+
+** Configure USART Baud Rate Register
+The baud rate is configured through the 16bit USART Baud Rate Register (UBRR). Remember that the USB can work with 9600bps, 115200bps and other baud rates.
+
+The formula to calculate the UBRRn value to store in the register is the following: $UBBRn = \frac{f_{osc}}{16 BAUD} - 1$ where f_{osc} is the oscilator frequence (usually 16MHz).
+
+The UBRRn value for 9600bps and a 16MHz clock is $\frac{16000000}{16 \cdot 9600} - 1 = 103.166666667$. According to the table at the Atmel 328 datasheet, UBRRn must be 103 for 16.0000MHz.
+
+#+BEGIN_SRC asm
+ldi r16, 0
+ldi r17, 103
+sts UBRR0H, r16
+sts UBRR0L, r17
+#+END_SRC
+
+** USART Control and Status Register
+
+*** UCSR A
+There are three USART Control and Status Register (UCSR). The UCSRnA is the first one that has the following bits:
+
+|---------+------+------+-------+-----+------+------+------+-------|
+| Name:   | RXCn | TXCn | UDREn | FEn | DORn | UPEn | U2Xn | MPCMn |
+|---------+------+------+-------+-----+------+------+------+-------|
+| /       | <    |      |       |     |      |      |      | >     |
+| R/W:    | R    | RW   | R     | R   | R    | R    | RW   | RW    |
+|---------+------+------+-------+-----+------+------+------+-------|
+| I. V. : | 0    | 0    | 1     | 0   | 0    | 0    | 0    | 0     |
+|---------+------+------+-------+-----+------+------+------+-------|
+(I. V. : Initial Value)
+
+- RXCn :: Receive Complete.
+- TXCn :: Transmit Complete.
+- UDREn :: Data Register Empty.
+- FEn :: Frame Error
+- DORn :: Data OverRun
+- UPEn :: USART Parity Error
+- U2Xn :: Double the USART transmition speed.
+- MPCMn :: MultiProcessor Communication Mode.
+
+Most of this bits are readonly. There is no need to set them because the initial values are right.
+
+Latter, the RXCn and the TXCn must be used for check if a character has been received or for start transmitting.
+
+*** UCSR B 
+
+The UCSR B has the following format.
+
+|--------+--------+--------+--------+-------+-------+--------+-------+-------|
+| Name:  | RCXIEn | TCXIEn | UDRIEn | RXENn | TXENn | UCSZn2 | RXB8n | TXB8n |
+|--------+--------+--------+--------+-------+-------+--------+-------+-------|
+| /      | <      |        |        |       |       |        |       | >     |
+| R/W:   | RW     | RW     | RW     | RW    | RW    | RW     | R     | RW    |
+|--------+--------+--------+--------+-------+-------+--------+-------+-------|
+| I. V.: | 0      | 0      | 0      | 0     | 0     | 0      | 0     | 0     |
+|--------+--------+--------+--------+-------+-------+--------+-------+-------|
+
+- RCXIEn :: RX Complete Interrupt Enable.
+- TCXIEn :: TX Complete Interrupt Enable.
+- UDRIEn :: USART Data Register Empty Interrupt Enable.
+- RXENn :: Receiver Enable.
+- TXENn :: Trasmitter Enable.
+- UCSZn2 :: Character Size. Sets the number of data bits in a frame the receiver and trasmitter will use.
+- RXB8n :: Receive Data Bit 8.
+- TXB8n :: Transmit Data Bit 8.
+
+No interruptions will be used. Thus, from 7 to 5 bits must be cleared. 
+
+However, the RXEN and TXEN must be enabled.
+
+#+BEGIN_SRC asm 
+  lds r16, UCSR0B
+  set
+  bld r16, 4       ; RXEN0 bit enabled
+  set
+  bld r16, 3       ; TXEN0 bit enabled
+  sts UCSR0B, r16
+#+END_SRC
+
+Another way to do this, but cleaning the rest of bits.
+
+#+BEGIN_SRC asm :tangle no
+  ldi r16, 0b00011000  ; 0x18
+  sts UCSR0B, r16
+#+END_SRC
+
+
+*** UCSR C
+
+|-------+---------+---------+-------+-------+-------+--------+--------+--------|
+| Name: | UMSELn1 | UMSELn0 | UPMn1 | UPMn0 | USBSn | UCSZn1 | UCSZn0 | UCPOLn |
+|-------+---------+---------+-------+-------+-------+--------+--------+--------|
+| /     | <       |         |       |       |       |        |        | >      |
+|-------+---------+---------+-------+-------+-------+--------+--------+--------|
+| I.V.: | 0       |       0 |     0 |     0 |     0 |      1 |      1 | 0      |
+|-------+---------+---------+-------+-------+-------+--------+--------+--------|
+
+All the bits are readable and writable.
+
+- UMSEL :: USART Mode Select.
+- UPM :: Parity Mode.
+- USBS :: Stop Bit Select.
+- UCSZN :: Character size.
+- UCPOL :: Clock Polarity.
+
+Consider the following values of UMSEL, the default value (00) will be used.
+
+|---------+---------+--------------------|
+| UMSELn1 | UMSELn2 | Mode               |
+|---------+---------+--------------------|
+|       0 |       0 | Async USART        |
+|       0 |       1 | Sync USART         |
+|       1 |       0 | Reserved           |
+|       1 |       1 | Master SPI (MSPIM) |
+|---------+---------+--------------------|
+
+It is supposed that the physical medium is error prone, so the parity should be disabled. The UPM can have these possible values.
+# Enable parity with even parity.
+
+|-------+-------+----------------------|
+| UPMn1 | UPMn0 | Parity Mode          |
+|-------+-------+----------------------|
+|     0 |     0 | Disabled             |
+|     0 |     1 | Reserved             |
+|     1 |     0 | Enabled, even parity |
+|     1 |     1 | Enabled, odd parity  |
+|-------+-------+----------------------|
+
+#+BEGIN_SRC asm :tangle no
+    lds r16, UCSR0C
+    set
+    bld r16, 5
+    clt
+    bld r16, 4
+    sts UCSR0C, r16
+#+END_SRC
+
+For the USBS, a 1 bit for stop bits transmission is sufficient.
+
+|------+-------------|
+| USBS | Stop Bit(s) |
+|------+-------------|
+|    0 | 1 bit       |
+|    1 | 2 bits      |
+|------+-------------|
+
+
+UCSZ determine the amount of bit per character. An 8bit character is the most common case when using ASCII. According to the table at the Atmel 328 datasheet, the default value (011) is the appropiate one.
+
+For this reason, the default values are correct.
+
+#+BEGIN_SRC asm :tangle no
+  ldi r16, 0b00000110  ; 0x06
+  sts UCSR0C, r16
+#+END_SRC
+
+* Receive and Transmit loop
+** Transmit a Hello
+
+First, Arduino must wait until data is empty. Turn off the led while waiting.
+
+#+BEGIN_SRC asm
+TXWAIT:
+    cbi OPORTB, 5     ; Turn off L led
+
+    lds r16, UCSR0A
+    sbrs r16, 5       ; bit 5 is UDRE
+    rjmp TXWAIT
+#+END_SRC
+
+Store an "A" letter to transmit. Turn on L led .
+
+#+BEGIN_SRC asm
+    sbi OPORTB, 5    ; turn on L led
+
+    ldi r16, 65
+    sts UDR0, r16
+#+END_SRC
+
+** Receive 
+
+Start the receive loop here.
+
+#+BEGIN_SRC asm
+RX_LOOP:
+#+END_SRC
+
+Wait until the RXC0 is set. If it set, skip the jump.
+
+#+BEGIN_SRC asm
+    lds r16, UCSR0A
+    sbrs r16, 7       ; RXC0 is 7th bit
+    rjmp RX_LOOP
+#+END_SRC
+
+If there is RX data, store it at the r17 register.
+
+#+BEGIN_SRC asm 
+    lds r17, UDR0
+#+END_SRC
+
+** Transmit 
+
+Wait for the empty data register
+
+#+BEGIN_SRC asm 
+TXWAIT2:
+    lds r16, UCSR0A
+    sbrs r16, 5      ; UDRE is the 5th bit
+    rjmp TXWAIT2
+#+END_SRC
+
+Send the data!
+
+#+BEGIN_SRC asm
+    sts UDR0, r17
+
+    rjmp RX_LOOP
+#+END_SRC
+
+* Vector Table
+
+#+BEGIN_SRC asm
+;; __________________________________________________
+	;; Vector Handlers
+	
+EXT_INT0:	; IRQ0 Handler 
+EXT_INT1:	; IRQ1 Handler 
+PCINT0:		; PCINT0 Handler 
+PCINT1:		; PCINT1 Handler 
+PCINT2:		; PCINT2 Handler 
+WDT:		; Watchdog Timer Handler 
+TIM2_COMPA:	; Timer2 Compare A Handler 
+TIM2_COMPB:	; Timer2 Compare B Handler 
+TIM2_OVF:	; Timer2 Overflow Handler 
+TIM1_CAPT:	; Timer1 Capture Handler 
+TIM1_COMPA:	; Timer1 Compare A Handler 
+TIM1_COMPB:	; Timer1 Compare B Handler 
+TIM1_OVF:	; Timer1 Overflow Handler 
+TIM0_COMPA:	; Timer0 Compare A Handler 
+TIM0_COMPB:	; Timer0 Compare B Handler 
+TIM0_OVF:	; Timer0 Overflow Handler 
+SPI_STC:	; SPI Transfer Complete Handler 
+USART_RXC:	; USART, RX Complete Handler 
+USART_UDRE:	; USART, UDR Empty Handler 
+USART_TXC:	; USART, TX Complete Handler 
+ADC:		; ADC Conversion Complete Handler 
+EE_RDY:		; EEPROM Ready Handler 
+ANA_COMP:	; Analog Comparator Handler 
+TWI:		; 2-wire Serial Interface Handler 
+SMP_RDY:	; SPM_RDYStore Program Memory Ready
+
+;; __________________________________________________
+END:
+	nop
+#+END_SRC
+
+* Test with Minicom
+
+Use the minicom to test the program considering the following parameters and configurations: baud rate, amount of stop bits and type of parity check if enabled.
+
+For this program configuration and supposing that Arduino is connected at /dev/ttyUSB0 port, the minicom can be executed with this command:
+
+: sudo minicom -b 9600 -D /dev/ttyUSB0 
+
+Ensure that 9600 8N1 is enabled. 8N1 means:
+
+- characters of 8 bits
+- no parity checks
+- 1 stop bit 
+
+* Meta     :noexport:
+
+# ----------------------------------------------------------------------
+#+TITLE:  Echo Example
+#+AUTHOR: Christian Gimenez
+#+DATE:   05 jun 2019
+#+EMAIL:
+#+DESCRIPTION: 
+#+KEYWORDS: 
+
+#+STARTUP: inlineimages hidestars content hideblocks entitiespretty indent fninline latexpreview
+#+TODO: TODO(t!) CURRENT(c!) PAUSED(p!) | DONE(d!) CANCELED(C!@)
+#+OPTIONS:   H:3 num:t toc:t \n:nil @:t ::t |:t ^:{} -:t f:t *:t <:t
+#+OPTIONS:   TeX:t LaTeX:t skip:nil d:nil todo:t pri:nil tags:not-in-toc tex:imagemagick
+#+LINK_UP:  
+#+LINK_HOME: 
+#+XSLT:
+
+# -- HTML Export
+#+INFOJS_OPT: view:info toc:t ftoc:t ltoc:t mouse:underline buttons:t path:libs/org-info.js
+#+EXPORT_SELECT_TAGS: export
+#+EXPORT_EXCLUDE_TAGS: noexport
+#+HTML_LINK_UP: ../index.html
+#+HTML_LINK_HOME: ../index.html
+
+# -- For ox-twbs or HTML Export
+#+HTML_HEAD: <link href="../libs/bootstrap.min.css" rel="stylesheet">
+#+HTML_HEAD: <script src="../libs/jquery.min.js"></script> 
+#+HTML_HEAD: <script src="../libs/bootstrap.min.js"></script>
+#+LANGUAGE: en
+
+# Local Variables:
+# org-hide-emphasis-markers: t
+# org-use-sub-superscripts: "{}"
+# fill-column: 80
+# visual-line-fringe-indicators: t
+# ispell-local-dictionary: "british"
+# End:

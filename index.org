@@ -1,0 +1,44 @@
+
+- [[file:echo/echo.org][Serial Echo Example]] (UART example) 
+- [[file:servo/servo.org][Servo Motor Example]] (PWM example)
+
+[[file:sitemap.org][Sitemap]] | [[file:theindex.org][Index]]
+
+* Meta     :noexport:
+
+  # ----------------------------------------------------------------------
+  #+TITLE:  Embedded Systems
+  #+AUTHOR: Christian Gimenez
+  #+DATE:   04 jun 2019
+  #+EMAIL:
+  #+DESCRIPTION: 
+  #+KEYWORDS: 
+
+  #+STARTUP: inlineimages hidestars content hideblocks entitiespretty indent fninline latexpreview
+  #+TODO: TODO(t!) CURRENT(c!) PAUSED(p!) | DONE(d!) CANCELED(C!@)
+  #+OPTIONS:   H:3 num:t toc:t \n:nil @:t ::t |:t ^:{} -:t f:t *:t <:t
+  #+OPTIONS:   TeX:t LaTeX:t skip:nil d:nil todo:t pri:nil tags:not-in-toc tex:imagemagick
+  #+LINK_UP:   
+  #+LINK_HOME: 
+  #+XSLT:
+
+  # -- HTML Export
+  #+INFOJS_OPT: view:info toc:t ftoc:t ltoc:t mouse:underline buttons:t path:libs/org-info.js
+  #+EXPORT_SELECT_TAGS: export
+  #+EXPORT_EXCLUDE_TAGS: noexport
+  #+HTML_LINK_UP: index.html
+  #+HTML_LINK_HOME: index.html
+
+  # -- For ox-twbs or HTML Export
+  #+HTML_HEAD: <link href="libs/bootstrap.min.css" rel="stylesheet">
+  #+HTML_HEAD: <script src="libs/jquery.min.js"></script> 
+  #+HTML_HEAD: <script src="libs/bootstrap.min.js"></script>
+  #+LANGUAGE: en
+
+  # Local Variables:
+  # org-hide-emphasis-markers: t
+  # org-use-sub-superscripts: "{}"
+  # fill-column: 80
+  # visual-line-fringe-indicators: t
+  # ispell-local-dictionary: "british"
+  # End:

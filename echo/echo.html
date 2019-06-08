@@ -1,0 +1,933 @@
+<!doctype html>
+<html lang="en">
+<head>
+<title>Echo Example</title>
+<!-- 2019-06-06 jue 01:57 -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="Org-mode">
+<meta name="author" content="Christian Gimenez">
+<link href="../libs/bootstrap.min.css" rel="stylesheet">
+<script src="../libs/jquery.min.js"></script>
+<script src="../libs/bootstrap.min.js"></script>
+<style type="text/css">
+/* org mode styles on top of twbs */
+
+html {
+    position: relative;
+    min-height: 100%;
+}
+
+body {
+    font-size: 18px;
+    margin-bottom: 105px;
+}
+
+footer {
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    height: 101px;
+    background-color: #f5f5f5;
+}
+
+footer > div {
+    padding: 10px;
+}
+
+footer p {
+    margin: 0 0 5px;
+    text-align: center;
+    font-size: 16px;
+}
+
+#table-of-contents {
+    margin-top: 20px;
+    margin-bottom: 20px;
+}
+
+blockquote p {
+    font-size: 18px;
+}
+
+pre {
+    font-size: 16px;
+}
+
+.footpara {
+    display: inline-block;
+}
+
+figcaption {
+  font-size: 16px;
+  color: #666;
+  font-style: italic;
+  padding-bottom: 15px;
+}
+
+/* from twbs docs */
+
+.bs-docs-sidebar.affix {
+    position: static;
+}
+@media (min-width: 768px) {
+    .bs-docs-sidebar {
+        padding-left: 20px;
+    }
+}
+
+/* All levels of nav */
+.bs-docs-sidebar .nav > li > a {
+    display: block;
+    padding: 4px 20px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #999;
+}
+.bs-docs-sidebar .nav > li > a:hover,
+.bs-docs-sidebar .nav > li > a:focus {
+    padding-left: 19px;
+    color: #A1283B;
+    text-decoration: none;
+    background-color: transparent;
+    border-left: 1px solid #A1283B;
+}
+.bs-docs-sidebar .nav > .active > a,
+.bs-docs-sidebar .nav > .active:hover > a,
+.bs-docs-sidebar .nav > .active:focus > a {
+    padding-left: 18px;
+    font-weight: bold;
+    color: #A1283B;
+    background-color: transparent;
+    border-left: 2px solid #A1283B;
+}
+
+/* Nav: second level (shown on .active) */
+.bs-docs-sidebar .nav .nav {
+    display: none; /* Hide by default, but at >768px, show it */
+    padding-bottom: 10px;
+}
+.bs-docs-sidebar .nav .nav > li > a {
+    padding-top: 1px;
+    padding-bottom: 1px;
+    padding-left: 30px;
+    font-size: 12px;
+    font-weight: normal;
+}
+.bs-docs-sidebar .nav .nav > li > a:hover,
+.bs-docs-sidebar .nav .nav > li > a:focus {
+    padding-left: 29px;
+}
+.bs-docs-sidebar .nav .nav > .active > a,
+.bs-docs-sidebar .nav .nav > .active:hover > a,
+.bs-docs-sidebar .nav .nav > .active:focus > a {
+    padding-left: 28px;
+    font-weight: 500;
+}
+
+/* Nav: third level (shown on .active) */
+.bs-docs-sidebar .nav .nav .nav {
+    padding-bottom: 10px;
+}
+.bs-docs-sidebar .nav .nav .nav > li > a {
+    padding-top: 1px;
+    padding-bottom: 1px;
+    padding-left: 40px;
+    font-size: 12px;
+    font-weight: normal;
+}
+.bs-docs-sidebar .nav .nav .nav > li > a:hover,
+.bs-docs-sidebar .nav .nav .nav > li > a:focus {
+    padding-left: 39px;
+}
+.bs-docs-sidebar .nav .nav .nav > .active > a,
+.bs-docs-sidebar .nav .nav .nav > .active:hover > a,
+.bs-docs-sidebar .nav .nav .nav > .active:focus > a {
+    padding-left: 38px;
+    font-weight: 500;
+}
+
+/* Show and affix the side nav when space allows it */
+@media (min-width: 992px) {
+    .bs-docs-sidebar .nav > .active > ul {
+        display: block;
+    }
+    /* Widen the fixed sidebar */
+    .bs-docs-sidebar.affix,
+    .bs-docs-sidebar.affix-bottom {
+        width: 213px;
+    }
+    .bs-docs-sidebar.affix {
+        position: fixed; /* Undo the static from mobile first approach */
+        top: 20px;
+    }
+    .bs-docs-sidebar.affix-bottom {
+        position: absolute; /* Undo the static from mobile first approach */
+    }
+    .bs-docs-sidebar.affix .bs-docs-sidenav,.bs-docs-sidebar.affix-bottom .bs-docs-sidenav {
+        margin-top: 0;
+        margin-bottom: 0
+    }
+}
+@media (min-width: 1200px) {
+    /* Widen the fixed sidebar again */
+    .bs-docs-sidebar.affix-bottom,
+    .bs-docs-sidebar.affix {
+        width: 263px;
+    }
+}
+</style>
+<script type="text/javascript">
+$(function() {
+    'use strict';
+
+    $('.bs-docs-sidebar li').first().addClass('active');
+
+    $(document.body).scrollspy({target: '.bs-docs-sidebar'});
+
+    $('.bs-docs-sidebar').affix();
+});
+</script>
+</head>
+<body>
+<div id="org-div-home-and-up">
+ <a accesskey="h" href="index.html"> UP </a>
+ |
+ <a accesskey="H" href="index.html"> HOME </a>
+</div><div id="content" class="container">
+<div class="row"><div class="col-md-9"><h1 class="title">Echo Example</h1>
+
+<div id="outline-container-sec-1" class="outline-2">
+<h2 id="sec-1"><span class="section-number-2">1</span> Include needed files</h2>
+<div class="outline-text-2" id="text-1">
+<div class="org-src-container">
+
+<pre class="src src-asm"><span style="color: #51afef; font-weight: bold;">.include</span> <span style="color: #98be65;">"vectors.asm"</span>
+<span style="color: #51afef; font-weight: bold;">.include</span> <span style="color: #98be65;">"registers.asm"</span>
+
+<span style="color: #51afef; font-weight: bold;">.text</span>
+
+<span style="color: #c678dd; font-weight: bold;">RESET</span>:
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-2" class="outline-2">
+<h2 id="sec-2"><span class="section-number-2">2</span> Configure Ouput LED</h2>
+<div class="outline-text-2" id="text-2">
+<p>
+The L led will be used for displaying if something is sended or other debugging purposes.
+</p>
+
+<p>
+Activate this led (which is the fifth in PORTB). In Arduino UNO schematics, the PB5 is also linked with the 6th pin on the board.
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-asm"><span style="color: #c678dd; font-weight: bold;">sbi</span> <span style="color: #51afef; font-weight: bold;">ODDRB</span>, 5
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-3" class="outline-2">
+<h2 id="sec-3"><span class="section-number-2">3</span> Configure UART registers</h2>
+<div class="outline-text-2" id="text-3">
+<p>
+UART Register are:
+</p>
+
+<dl class="org-dl">
+<dt> UDR0 </dt><dd>USART Data Register 0, where the receiver and transmitter store the information.
+</dd>
+<dt> UBRR0 </dt><dd>Two 8bit register for configuring the baud rate.
+</dd>
+<dt> UCSR0 </dt><dd>Three registers for configuring the mode.
+</dd>
+</dl>
+</div>
+
+<div id="outline-container-sec-3-1" class="outline-3">
+<h3 id="sec-3-1"><span class="section-number-3">3.1</span> Configure USART Baud Rate Register</h3>
+<div class="outline-text-3" id="text-3-1">
+<p>
+The baud rate is configured through the 16bit USART Baud Rate Register (UBRR). Remember that the USB can work with 9600bps, 115200bps and other baud rates.
+</p>
+
+<p>
+The formula to calculate the UBRRn value to store in the register is the following: <img src="ltxpng/echo_86587dcdce310ffa184e761e3954c24ed513e986.png" class="img-responsive" alt="$UBBRn = \frac{f_{osc}}{16 BAUD} - 1$"> where f<sub>osc</sub> is the oscilator frequence (usually 16MHz).
+</p>
+
+<p>
+The UBRRn value for 9600bps and a 16MHz clock is <img src="ltxpng/echo_c3ae0b262f88020606a1eb1e20073fc68641db71.png" class="img-responsive" alt="$\frac{16000000}{16 \cdot 9600} - 1 = 103.166666667$">. According to the table at the Atmel 328 datasheet, UBRRn must be 103 for 16.0000MHz.
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-asm"><span style="color: #c678dd; font-weight: bold;">ldi</span> <span style="color: #51afef; font-weight: bold;">r16</span>, 0
+<span style="color: #c678dd; font-weight: bold;">ldi</span> <span style="color: #51afef; font-weight: bold;">r17</span>, 103
+<span style="color: #c678dd; font-weight: bold;">sts</span> <span style="color: #51afef; font-weight: bold;">UBRR0H</span>, r16
+<span style="color: #c678dd; font-weight: bold;">sts</span> <span style="color: #51afef; font-weight: bold;">UBRR0L</span>, r17
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-3-2" class="outline-3">
+<h3 id="sec-3-2"><span class="section-number-3">3.2</span> USART Control and Status Register</h3>
+<div class="outline-text-3" id="text-3-2">
+</div><div id="outline-container-sec-3-2-1" class="outline-4">
+<h4 id="sec-3-2-1"><span class="section-number-4">3.2.1</span> UCSR A</h4>
+<div class="outline-text-4" id="text-3-2-1">
+<p>
+There are three USART Control and Status Register (UCSR). The UCSRnA is the first one that has the following bits:
+</p>
+
+<table class="table table-striped table-bordered table-hover table-condensed">
+
+
+<colgroup>
+<col  class="left">
+</colgroup>
+
+<colgroup>
+<col  class="left">
+
+<col  class="left">
+
+<col  class="left">
+
+<col  class="left">
+
+<col  class="left">
+
+<col  class="left">
+
+<col  class="left">
+
+<col  class="left">
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="text-left">Name:</th>
+<th scope="col" class="text-left">RXCn</th>
+<th scope="col" class="text-left">TXCn</th>
+<th scope="col" class="text-left">UDREn</th>
+<th scope="col" class="text-left">FEn</th>
+<th scope="col" class="text-left">DORn</th>
+<th scope="col" class="text-left">UPEn</th>
+<th scope="col" class="text-left">U2Xn</th>
+<th scope="col" class="text-left">MPCMn</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="text-left">R/W:</td>
+<td class="text-left">R</td>
+<td class="text-left">RW</td>
+<td class="text-left">R</td>
+<td class="text-left">R</td>
+<td class="text-left">R</td>
+<td class="text-left">R</td>
+<td class="text-left">RW</td>
+<td class="text-left">RW</td>
+</tr>
+</tbody>
+<tbody>
+<tr>
+<td class="text-left">I. V. :</td>
+<td class="text-left">0</td>
+<td class="text-left">0</td>
+<td class="text-left">1</td>
+<td class="text-left">0</td>
+<td class="text-left">0</td>
+<td class="text-left">0</td>
+<td class="text-left">0</td>
+<td class="text-left">0</td>
+</tr>
+</tbody>
+</table>
+<p>
+(I. V. : Initial Value)
+</p>
+
+<dl class="org-dl">
+<dt> RXCn </dt><dd>Receive Complete.
+</dd>
+<dt> TXCn </dt><dd>Transmit Complete.
+</dd>
+<dt> UDREn </dt><dd>Data Register Empty.
+</dd>
+<dt> FEn </dt><dd>Frame Error
+</dd>
+<dt> DORn </dt><dd>Data OverRun
+</dd>
+<dt> UPEn </dt><dd>USART Parity Error
+</dd>
+<dt> U2Xn </dt><dd>Double the USART transmition speed.
+</dd>
+<dt> MPCMn </dt><dd>MultiProcessor Communication Mode.
+</dd>
+</dl>
+
+<p>
+Most of this bits are readonly. There is no need to set them because the initial values are right.
+</p>
+
+<p>
+Latter, the RXCn and the TXCn must be used for check if a character has been received or for start transmitting.
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-3-2-2" class="outline-4">
+<h4 id="sec-3-2-2"><span class="section-number-4">3.2.2</span> UCSR B</h4>
+<div class="outline-text-4" id="text-3-2-2">
+<p>
+The UCSR B has the following format.
+</p>
+
+<table class="table table-striped table-bordered table-hover table-condensed">
+
+
+<colgroup>
+<col  class="left">
+</colgroup>
+
+<colgroup>
+<col  class="left">
+
+<col  class="left">
+
+<col  class="left">
+
+<col  class="left">
+
+<col  class="left">
+
+<col  class="left">
+
+<col  class="left">
+
+<col  class="left">
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="text-left">Name:</th>
+<th scope="col" class="text-left">RCXIEn</th>
+<th scope="col" class="text-left">TCXIEn</th>
+<th scope="col" class="text-left">UDRIEn</th>
+<th scope="col" class="text-left">RXENn</th>
+<th scope="col" class="text-left">TXENn</th>
+<th scope="col" class="text-left">UCSZn2</th>
+<th scope="col" class="text-left">RXB8n</th>
+<th scope="col" class="text-left">TXB8n</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="text-left">R/W:</td>
+<td class="text-left">RW</td>
+<td class="text-left">RW</td>
+<td class="text-left">RW</td>
+<td class="text-left">RW</td>
+<td class="text-left">RW</td>
+<td class="text-left">RW</td>
+<td class="text-left">R</td>
+<td class="text-left">RW</td>
+</tr>
+</tbody>
+<tbody>
+<tr>
+<td class="text-left">I. V.:</td>
+<td class="text-left">0</td>
+<td class="text-left">0</td>
+<td class="text-left">0</td>
+<td class="text-left">0</td>
+<td class="text-left">0</td>
+<td class="text-left">0</td>
+<td class="text-left">0</td>
+<td class="text-left">0</td>
+</tr>
+</tbody>
+</table>
+
+<dl class="org-dl">
+<dt> RCXIEn </dt><dd>RX Complete Interrupt Enable.
+</dd>
+<dt> TCXIEn </dt><dd>TX Complete Interrupt Enable.
+</dd>
+<dt> UDRIEn </dt><dd>USART Data Register Empty Interrupt Enable.
+</dd>
+<dt> RXENn </dt><dd>Receiver Enable.
+</dd>
+<dt> TXENn </dt><dd>Trasmitter Enable.
+</dd>
+<dt> UCSZn2 </dt><dd>Character Size. Sets the number of data bits in a frame the receiver and trasmitter will use.
+</dd>
+<dt> RXB8n </dt><dd>Receive Data Bit 8.
+</dd>
+<dt> TXB8n </dt><dd>Transmit Data Bit 8.
+</dd>
+</dl>
+
+<p>
+No interruptions will be used. Thus, from 7 to 5 bits must be cleared. 
+</p>
+
+<p>
+However, the RXEN and TXEN must be enabled.
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-asm"><span style="color: #c678dd; font-weight: bold;">lds</span> <span style="color: #51afef; font-weight: bold;">r16</span>, UCSR0B
+<span style="color: #c678dd; font-weight: bold;">set</span>
+<span style="color: #c678dd; font-weight: bold;">bld</span> <span style="color: #51afef; font-weight: bold;">r16</span>, 4       <span style="color: #a9a9a9;">; </span><span style="color: #a9a9a9;">RXEN0 bit enabled</span>
+<span style="color: #c678dd; font-weight: bold;">set</span>
+<span style="color: #c678dd; font-weight: bold;">bld</span> <span style="color: #51afef; font-weight: bold;">r16</span>, 3       <span style="color: #a9a9a9;">; </span><span style="color: #a9a9a9;">TXEN0 bit enabled</span>
+<span style="color: #c678dd; font-weight: bold;">sts</span> <span style="color: #51afef; font-weight: bold;">UCSR0B</span>, r16
+</pre>
+</div>
+
+<p>
+Another way to do this, but cleaning the rest of bits.
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-asm"><span style="color: #c678dd; font-weight: bold;">ldi</span> <span style="color: #51afef; font-weight: bold;">r16</span>, 0b00011000  <span style="color: #a9a9a9;">; </span><span style="color: #a9a9a9;">0x18</span>
+<span style="color: #c678dd; font-weight: bold;">sts</span> <span style="color: #51afef; font-weight: bold;">UCSR0B</span>, r16
+</pre>
+</div>
+</div>
+</div>
+
+
+<div id="outline-container-sec-3-2-3" class="outline-4">
+<h4 id="sec-3-2-3"><span class="section-number-4">3.2.3</span> UCSR C</h4>
+<div class="outline-text-4" id="text-3-2-3">
+<table class="table table-striped table-bordered table-hover table-condensed">
+
+
+<colgroup>
+<col  class="left">
+</colgroup>
+
+<colgroup>
+<col  class="right">
+
+<col  class="right">
+
+<col  class="right">
+
+<col  class="right">
+
+<col  class="right">
+
+<col  class="right">
+
+<col  class="right">
+
+<col  class="right">
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="text-left">Name:</th>
+<th scope="col" class="text-right">UMSELn1</th>
+<th scope="col" class="text-right">UMSELn0</th>
+<th scope="col" class="text-right">UPMn1</th>
+<th scope="col" class="text-right">UPMn0</th>
+<th scope="col" class="text-right">USBSn</th>
+<th scope="col" class="text-right">UCSZn1</th>
+<th scope="col" class="text-right">UCSZn0</th>
+<th scope="col" class="text-right">UCPOLn</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="text-left">I.V.:</td>
+<td class="text-right">0</td>
+<td class="text-right">0</td>
+<td class="text-right">0</td>
+<td class="text-right">0</td>
+<td class="text-right">0</td>
+<td class="text-right">1</td>
+<td class="text-right">1</td>
+<td class="text-right">0</td>
+</tr>
+</tbody>
+</table>
+
+<p>
+All the bits are readable and writable.
+</p>
+
+<dl class="org-dl">
+<dt> UMSEL </dt><dd>USART Mode Select.
+</dd>
+<dt> UPM </dt><dd>Parity Mode.
+</dd>
+<dt> USBS </dt><dd>Stop Bit Select.
+</dd>
+<dt> UCSZN </dt><dd>Character size.
+</dd>
+<dt> UCPOL </dt><dd>Clock Polarity.
+</dd>
+</dl>
+
+<p>
+Consider the following values of UMSEL, the default value (00) will be used.
+</p>
+
+<table class="table table-striped table-bordered table-hover table-condensed">
+
+
+<colgroup>
+<col  class="right">
+
+<col  class="right">
+
+<col  class="left">
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="text-right">UMSELn1</th>
+<th scope="col" class="text-right">UMSELn2</th>
+<th scope="col" class="text-left">Mode</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="text-right">0</td>
+<td class="text-right">0</td>
+<td class="text-left">Async USART</td>
+</tr>
+
+<tr>
+<td class="text-right">0</td>
+<td class="text-right">1</td>
+<td class="text-left">Sync USART</td>
+</tr>
+
+<tr>
+<td class="text-right">1</td>
+<td class="text-right">0</td>
+<td class="text-left">Reserved</td>
+</tr>
+
+<tr>
+<td class="text-right">1</td>
+<td class="text-right">1</td>
+<td class="text-left">Master SPI (MSPIM)</td>
+</tr>
+</tbody>
+</table>
+
+<p>
+It is supposed that the physical medium is error prone, so the parity should be disabled. The UPM can have these possible values.
+</p>
+
+<table class="table table-striped table-bordered table-hover table-condensed">
+
+
+<colgroup>
+<col  class="right">
+
+<col  class="right">
+
+<col  class="left">
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="text-right">UPMn1</th>
+<th scope="col" class="text-right">UPMn0</th>
+<th scope="col" class="text-left">Parity Mode</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="text-right">0</td>
+<td class="text-right">0</td>
+<td class="text-left">Disabled</td>
+</tr>
+
+<tr>
+<td class="text-right">0</td>
+<td class="text-right">1</td>
+<td class="text-left">Reserved</td>
+</tr>
+
+<tr>
+<td class="text-right">1</td>
+<td class="text-right">0</td>
+<td class="text-left">Enabled, even parity</td>
+</tr>
+
+<tr>
+<td class="text-right">1</td>
+<td class="text-right">1</td>
+<td class="text-left">Enabled, odd parity</td>
+</tr>
+</tbody>
+</table>
+
+<div class="org-src-container">
+
+<pre class="src src-asm"><span style="color: #c678dd; font-weight: bold;">lds</span> <span style="color: #51afef; font-weight: bold;">r16</span>, UCSR0C
+<span style="color: #c678dd; font-weight: bold;">set</span>
+<span style="color: #c678dd; font-weight: bold;">bld</span> <span style="color: #51afef; font-weight: bold;">r16</span>, 5
+<span style="color: #c678dd; font-weight: bold;">clt</span>
+<span style="color: #c678dd; font-weight: bold;">bld</span> <span style="color: #51afef; font-weight: bold;">r16</span>, 4
+<span style="color: #c678dd; font-weight: bold;">sts</span> <span style="color: #51afef; font-weight: bold;">UCSR0C</span>, r16
+</pre>
+</div>
+
+<p>
+For the USBS, a 1 bit for stop bits transmission is sufficient.
+</p>
+
+<table class="table table-striped table-bordered table-hover table-condensed">
+
+
+<colgroup>
+<col  class="right">
+
+<col  class="left">
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="text-right">USBS</th>
+<th scope="col" class="text-left">Stop Bit(s)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="text-right">0</td>
+<td class="text-left">1 bit</td>
+</tr>
+
+<tr>
+<td class="text-right">1</td>
+<td class="text-left">2 bits</td>
+</tr>
+</tbody>
+</table>
+
+
+<p>
+UCSZ determine the amount of bit per character. An 8bit character is the most common case when using ASCII. According to the table at the Atmel 328 datasheet, the default value (011) is the appropiate one.
+</p>
+
+<p>
+For this reason, the default values are correct.
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-asm"><span style="color: #c678dd; font-weight: bold;">ldi</span> <span style="color: #51afef; font-weight: bold;">r16</span>, 0b00000110  <span style="color: #a9a9a9;">; </span><span style="color: #a9a9a9;">0x06</span>
+<span style="color: #c678dd; font-weight: bold;">sts</span> <span style="color: #51afef; font-weight: bold;">UCSR0C</span>, r16
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+
+<div id="outline-container-sec-4" class="outline-2">
+<h2 id="sec-4"><span class="section-number-2">4</span> Receive and Transmit loop</h2>
+<div class="outline-text-2" id="text-4">
+</div><div id="outline-container-sec-4-1" class="outline-3">
+<h3 id="sec-4-1"><span class="section-number-3">4.1</span> Transmit a Hello</h3>
+<div class="outline-text-3" id="text-4-1">
+<p>
+First, Arduino must wait until data is empty. Turn off the led while waiting.
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-asm"><span style="color: #c678dd; font-weight: bold;">TXWAIT</span>:
+    <span style="color: #51afef; font-weight: bold;">cbi</span> OPORTB, 5     <span style="color: #a9a9a9;">; </span><span style="color: #a9a9a9;">Turn off L led</span>
+
+    <span style="color: #51afef; font-weight: bold;">lds</span> r16, UCSR0A
+    <span style="color: #51afef; font-weight: bold;">sbrs</span> r16, 5       <span style="color: #a9a9a9;">; </span><span style="color: #a9a9a9;">bit 5 is UDRE</span>
+    <span style="color: #51afef; font-weight: bold;">rjmp</span> TXWAIT
+</pre>
+</div>
+
+<p>
+Store an "A" letter to transmit. Turn on L led .
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-asm"><span style="color: #c678dd; font-weight: bold;">sbi</span> <span style="color: #51afef; font-weight: bold;">OPORTB</span>, 5    <span style="color: #a9a9a9;">; </span><span style="color: #a9a9a9;">turn on L led</span>
+
+<span style="color: #c678dd; font-weight: bold;">ldi</span> <span style="color: #51afef; font-weight: bold;">r16</span>, 65
+<span style="color: #c678dd; font-weight: bold;">sts</span> <span style="color: #51afef; font-weight: bold;">UDR0</span>, r16
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-4-2" class="outline-3">
+<h3 id="sec-4-2"><span class="section-number-3">4.2</span> Receive</h3>
+<div class="outline-text-3" id="text-4-2">
+<p>
+Start the receive loop here.
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-asm"><span style="color: #c678dd; font-weight: bold;">RX_LOOP</span>:
+</pre>
+</div>
+
+<p>
+Wait until the RXC0 is set. If it set, skip the jump.
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-asm"><span style="color: #c678dd; font-weight: bold;">lds</span> <span style="color: #51afef; font-weight: bold;">r16</span>, UCSR0A
+<span style="color: #c678dd; font-weight: bold;">sbrs</span> <span style="color: #51afef; font-weight: bold;">r16</span>, 7       <span style="color: #a9a9a9;">; </span><span style="color: #a9a9a9;">RXC0 is 7th bit</span>
+<span style="color: #c678dd; font-weight: bold;">rjmp</span> <span style="color: #51afef; font-weight: bold;">RX</span>_LOOP
+</pre>
+</div>
+
+<p>
+If there is RX data, store it at the r17 register.
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-asm"><span style="color: #c678dd; font-weight: bold;">lds</span> <span style="color: #51afef; font-weight: bold;">r17</span>, UDR0
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-4-3" class="outline-3">
+<h3 id="sec-4-3"><span class="section-number-3">4.3</span> Transmit</h3>
+<div class="outline-text-3" id="text-4-3">
+<p>
+Wait for the empty data register
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-asm"><span style="color: #c678dd; font-weight: bold;">TXWAIT2</span>:
+    <span style="color: #51afef; font-weight: bold;">lds</span> r16, UCSR0A
+    <span style="color: #51afef; font-weight: bold;">sbrs</span> r16, 5      <span style="color: #a9a9a9;">; </span><span style="color: #a9a9a9;">UDRE is the 5th bit</span>
+    <span style="color: #51afef; font-weight: bold;">rjmp</span> TXWAIT2
+</pre>
+</div>
+
+
+<p>
+Send the data!
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-asm"><span style="color: #c678dd; font-weight: bold;">sts</span> <span style="color: #51afef; font-weight: bold;">UDR0</span>, r17
+
+<span style="color: #c678dd; font-weight: bold;">rjmp</span> <span style="color: #51afef; font-weight: bold;">RX</span>_LOOP
+</pre>
+</div>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-5" class="outline-2">
+<h2 id="sec-5"><span class="section-number-2">5</span> Vector Table</h2>
+<div class="outline-text-2" id="text-5">
+<div class="org-src-container">
+
+<pre class="src src-asm"><span style="color: #a9a9a9;">;; </span><span style="color: #a9a9a9;">__________________________________________________</span>
+        <span style="color: #a9a9a9;">;; </span><span style="color: #a9a9a9;">Vector Handlers</span>
+
+<span style="color: #c678dd; font-weight: bold;">EXT_INT0</span>:       <span style="color: #a9a9a9;">; </span><span style="color: #a9a9a9;">IRQ0 Handler </span>
+<span style="color: #c678dd; font-weight: bold;">EXT_INT1</span>:       <span style="color: #a9a9a9;">; </span><span style="color: #a9a9a9;">IRQ1 Handler </span>
+<span style="color: #c678dd; font-weight: bold;">PCINT0</span>:         <span style="color: #a9a9a9;">; </span><span style="color: #a9a9a9;">PCINT0 Handler </span>
+<span style="color: #c678dd; font-weight: bold;">PCINT1</span>:         <span style="color: #a9a9a9;">; </span><span style="color: #a9a9a9;">PCINT1 Handler </span>
+<span style="color: #c678dd; font-weight: bold;">PCINT2</span>:         <span style="color: #a9a9a9;">; </span><span style="color: #a9a9a9;">PCINT2 Handler </span>
+<span style="color: #c678dd; font-weight: bold;">WDT</span>:            <span style="color: #a9a9a9;">; </span><span style="color: #a9a9a9;">Watchdog Timer Handler </span>
+<span style="color: #c678dd; font-weight: bold;">TIM2_COMPA</span>:     <span style="color: #a9a9a9;">; </span><span style="color: #a9a9a9;">Timer2 Compare A Handler </span>
+<span style="color: #c678dd; font-weight: bold;">TIM2_COMPB</span>:     <span style="color: #a9a9a9;">; </span><span style="color: #a9a9a9;">Timer2 Compare B Handler </span>
+<span style="color: #c678dd; font-weight: bold;">TIM2_OVF</span>:       <span style="color: #a9a9a9;">; </span><span style="color: #a9a9a9;">Timer2 Overflow Handler </span>
+<span style="color: #c678dd; font-weight: bold;">TIM1_CAPT</span>:      <span style="color: #a9a9a9;">; </span><span style="color: #a9a9a9;">Timer1 Capture Handler </span>
+<span style="color: #c678dd; font-weight: bold;">TIM1_COMPA</span>:     <span style="color: #a9a9a9;">; </span><span style="color: #a9a9a9;">Timer1 Compare A Handler </span>
+<span style="color: #c678dd; font-weight: bold;">TIM1_COMPB</span>:     <span style="color: #a9a9a9;">; </span><span style="color: #a9a9a9;">Timer1 Compare B Handler </span>
+<span style="color: #c678dd; font-weight: bold;">TIM1_OVF</span>:       <span style="color: #a9a9a9;">; </span><span style="color: #a9a9a9;">Timer1 Overflow Handler </span>
+<span style="color: #c678dd; font-weight: bold;">TIM0_COMPA</span>:     <span style="color: #a9a9a9;">; </span><span style="color: #a9a9a9;">Timer0 Compare A Handler </span>
+<span style="color: #c678dd; font-weight: bold;">TIM0_COMPB</span>:     <span style="color: #a9a9a9;">; </span><span style="color: #a9a9a9;">Timer0 Compare B Handler </span>
+<span style="color: #c678dd; font-weight: bold;">TIM0_OVF</span>:       <span style="color: #a9a9a9;">; </span><span style="color: #a9a9a9;">Timer0 Overflow Handler </span>
+<span style="color: #c678dd; font-weight: bold;">SPI_STC</span>:        <span style="color: #a9a9a9;">; </span><span style="color: #a9a9a9;">SPI Transfer Complete Handler </span>
+<span style="color: #c678dd; font-weight: bold;">USART_RXC</span>:      <span style="color: #a9a9a9;">; </span><span style="color: #a9a9a9;">USART, RX Complete Handler </span>
+<span style="color: #c678dd; font-weight: bold;">USART_UDRE</span>:     <span style="color: #a9a9a9;">; </span><span style="color: #a9a9a9;">USART, UDR Empty Handler </span>
+<span style="color: #c678dd; font-weight: bold;">USART_TXC</span>:      <span style="color: #a9a9a9;">; </span><span style="color: #a9a9a9;">USART, TX Complete Handler </span>
+<span style="color: #c678dd; font-weight: bold;">ADC</span>:            <span style="color: #a9a9a9;">; </span><span style="color: #a9a9a9;">ADC Conversion Complete Handler </span>
+<span style="color: #c678dd; font-weight: bold;">EE_RDY</span>:         <span style="color: #a9a9a9;">; </span><span style="color: #a9a9a9;">EEPROM Ready Handler </span>
+<span style="color: #c678dd; font-weight: bold;">ANA_COMP</span>:       <span style="color: #a9a9a9;">; </span><span style="color: #a9a9a9;">Analog Comparator Handler </span>
+<span style="color: #c678dd; font-weight: bold;">TWI</span>:            <span style="color: #a9a9a9;">; </span><span style="color: #a9a9a9;">2-wire Serial Interface Handler </span>
+<span style="color: #c678dd; font-weight: bold;">SMP_RDY</span>:        <span style="color: #a9a9a9;">; </span><span style="color: #a9a9a9;">SPM_RDYStore Program Memory Ready</span>
+
+<span style="color: #a9a9a9;">;; </span><span style="color: #a9a9a9;">__________________________________________________</span>
+<span style="color: #c678dd; font-weight: bold;">END</span>:
+        <span style="color: #51afef; font-weight: bold;">nop</span>
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-6" class="outline-2">
+<h2 id="sec-6"><span class="section-number-2">6</span> Test with Minicom</h2>
+<div class="outline-text-2" id="text-6">
+<p>
+Use the minicom to test considering the following parameters and configurations.
+</p>
+</div>
+</div>
+</div><div class="col-md-3"><nav id="table-of-contents">
+<div id="text-table-of-contents" class="bs-docs-sidebar">
+<ul class="nav">
+<li><a href="#sec-1">1. Include needed files</a></li>
+<li><a href="#sec-2">2. Configure Ouput LED</a></li>
+<li><a href="#sec-3">3. Configure UART registers</a>
+<ul class="nav">
+<li><a href="#sec-3-1">3.1. Configure USART Baud Rate Register</a></li>
+<li><a href="#sec-3-2">3.2. USART Control and Status Register</a>
+<ul class="nav">
+<li><a href="#sec-3-2-1">3.2.1. UCSR A</a></li>
+<li><a href="#sec-3-2-2">3.2.2. UCSR B</a></li>
+<li><a href="#sec-3-2-3">3.2.3. UCSR C</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#sec-4">4. Receive and Transmit loop</a>
+<ul class="nav">
+<li><a href="#sec-4-1">4.1. Transmit a Hello</a></li>
+<li><a href="#sec-4-2">4.2. Receive</a></li>
+<li><a href="#sec-4-3">4.3. Transmit</a></li>
+</ul>
+</li>
+<li><a href="#sec-5">5. Vector Table</a></li>
+<li><a href="#sec-6">6. Test with Minicom</a></li>
+</ul>
+</div>
+</nav>
+</div></div></div>
+<footer id="postamble" class="">
+<div><p class="date">Date: 05 jun 2019</p>
+<p class="author">Author: Christian Gimenez</p>
+<p class="date">Created: 2019-06-06 jue 01:57</p>
+<p class="creator"><a href="http://www.gnu.org/software/emacs/">Emacs</a> 26.2 (<a href="http://orgmode.org">Org-mode</a> 9.2.3)</p>
+</div>
+</footer>
+</body>
+</html>
