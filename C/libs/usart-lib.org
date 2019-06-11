@@ -1,0 +1,669 @@
+
+* Header 
+  :PROPERTIES:
+  :header-args: :comments no :padline yes :tangle usart-lib.h
+  :END:
+
+** License
+#+BEGIN_SRC c
+/* 
+   Copyright 2019 Christian Gimenez
+   
+   Author: Christian Gimenez   
+
+   usar-lib.h
+   
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation, either version 3 of the License, or
+   (at your option) any later version.
+   
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+   
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+#+END_SRC
+
+** Start header
+Don't include the header more than once.
+
+#+BEGIN_SRC c
+#ifndef _USART_LIB_H
+#define _USART_LIB_H 1
+#+END_SRC
+
+Include integer subtypes definitions (like ~uint8_t~).
+
+#+BEGIN_SRC c
+#include <stdint.h>
+#+END_SRC
+
+Include the math library for the ~round()~ function.
+
+#+BEGIN_SRC c
+#include <math.h>
+#+END_SRC
+
+** Configuration constants
+These constants must be setted accordingly before using the library.
+
+#+BEGIN_SRC c
+#define OSC_FREQUENCY 16000000UL // 16MHz
+#define BAUD_RATE 9600 // bps
+#+END_SRC
+
+Calculate the UBRR register value. The 16.0 must be specified to make a coercion to float type. If ~round()~ is not use, the value will be truncated when using an implicit cast to the unsigned long type, resulting in a wrong results.
+
+For example: 16000000/16/115200 - 1 = 7.68. When rounding up, the result will be 8, but when truncating it is 7. However, round(16000000/16/115200) - 1 = round(8.68) - 1 = 9 - 1 = 8.
+
+When having problems, set the BRR_VALUE directly with the constant without any equation and comment the ~#include <math.h>~ line.
+
+#+BEGIN_SRC c
+// Apply the UBRR formulae according to the Atmega 328 datasheet.
+#define BRR_VALUE (unsigned long) round(OSC_FREQUENCY/16.0/BAUD_RATE) - 1
+#+END_SRC
+
+Enable transmission and reception. 
+
+#+BEGIN_SRC c
+#define USART_RX_ENABLE 1
+#define USART_TX_ENABLE 1
+#+END_SRC
+
+Disable interruptions for receiving, transmiting and UDR (non empty data received). Keep the definitions in case the developer want to use them.
+
+#+BEGIN_SRC c
+// #define USART_RX_INT_ENABLE 1
+// #define USART_TX_INT_ENABLE 1
+// #define USART_UDR_INT_ENABLE 1
+#+END_SRC
+
+
+Enable 8 bit character size
+
+#+BEGIN_SRC c
+// #define USART_CHARACTER_SIZE_5 1
+// #define USART_CHARACTER_SIZE_6 1
+// #define USART_CHARACTER_SIZE_7 1
+#define USART_CHARACTER_SIZE_8 1
+// #define USART_CHARACTER_SIZE_9 1
+#+END_SRC
+
+Enable Async USART.
+
+#+BEGIN_SRC c
+#define USART_ASYNC_MODE 1
+// #define USART_SYNC_MODE 1
+// #define USART_MASTER_SPI_MODE 1
+#+END_SRC
+
+Disable parity check. Declare the other parity just in case the developers want to use them.
+
+#+BEGIN_SRC c
+#define USART_PARITY_CHECK_DISABLE 1
+// #define USART_PARITY_CHECK_ODD 1
+// #define USART_PARITY_CHECK_EVEN 1
+#+END_SRC
+
+Set one stop bit. Define the 2 stop bits in case the developers want to use them.
+
+#+BEGIN_SRC c
+#define USART_STOP_BIT_ONE 1
+// #define USART_STOP_BIT_TWO 1
+#+END_SRC
+
+Set the clock polarity for using the rising edge when transmitting and falling edge when recieving.
+
+#+BEGIN_SRC c
+#define USART_POLARITY_TX_RISING 1
+// #define USART_POLARITY_TX_FALLING 1
+#+END_SRC
+
+** Define methods
+Initialize the serial registers. 
+
+#+BEGIN_SRC c
+void serial_init();
+#+END_SRC
+
+*** Receive data
+Receive a character from the UART.
+
+#+BEGIN_SRC c
+char serial_get_char();
+#+END_SRC
+
+Receive a string up to a "\n" character.
+
+#+BEGIN_SRC c
+char* serial_get_line();
+#+END_SRC
+
+Receive a string up to a "\0" character.
+
+#+BEGIN_SRC c
+char* serial_get_string();
+#+END_SRC
+
+Receive an integer (send a string up to a "\0" or "\n").
+
+#+BEGIN_SRC c
+int serial_get_integer();
+#+END_SRC
+
+*** Send data
+Send a character.
+
+#+BEGIN_SRC c
+void serial_put_char(char c);
+#+END_SRC
+
+Send a string up to the "\0" character.
+
+#+BEGIN_SRC c
+void serial_send_string(char *s);
+#+END_SRC
+
+Send an integer number. This converts the number into a string and sends it.
+
+#+BEGIN_SRC c
+void serial_send_integer(int number);
+#+END_SRC
+
+** End header
+
+#+BEGIN_SRC c
+#endif // _USART_LIB_H
+#+END_SRC
+
+* Body
+  :PROPERTIES:
+  :header-args: :comments no :padline yes :tangle usart-lib.c
+  :END:
+
+** License
+
+#+BEGIN_SRC c
+/* 
+   Copyright 2019 Christian Gimenez
+   
+   Author: Christian Gimenez   
+
+   usart-lib.c
+   
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation, either version 3 of the License, or
+   (at your option) any later version.
+   
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+   
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+#+END_SRC
+
+** Include headers
+Include the declarations.
+
+#+BEGIN_SRC c
+#include "usart-lib.h"
+#+END_SRC
+
+Inlude AVR I/O register and bit names (like ~RXEN0~).
+
+#+BEGIN_SRC c
+#include <avr/io.h>
+#+END_SRC
+
+** Structure
+This structure maps directly to the memory register map needed to set the USART configuration.
+
+#+BEGIN_SRC c
+     typedef struct {
+       uint8_t status_control_a;
+       uint8_t status_control_b;
+       uint8_t status_control_c;
+       uint8_t reserved1;
+       uint8_t baud_rate_l;
+       uint8_t baud_rate_h;
+       uint8_t data;
+     } volatile uart_t;
+#+END_SRC
+
+Map the structure starting from the 0xc0 address.
+   
+#+BEGIN_SRC c
+     volatile uart_t *serial = (uart_t*) (0xc0);
+#+END_SRC
+
+** Implement methods
+
+*** init
+#+BEGIN_SRC c
+void serial_init(){
+#+END_SRC
+
+**** UBRR
+Set the baud rate high value. 
+
+#+BEGIN_SRC c
+serial->baud_rate_h = (unsigned char) (BRR_VALUE>>8);
+serial->baud_rate_l = (unsigned char) BRR_VALUE;
+#+END_SRC
+
+**** UCSR A
+There is no need to set any bit at the status register A.
+
+**** UCSR B
+ Set the control and status register B for:
+
+- Disable interruptions (RCXIE, TCXIE and UDRIE).
+- Enabling receiver and transmitter (RXEN and TXEN bits).
+- 8bit Character size (UCSZ2 bit, the rest are on the UCSR C register).
+
+Thus, the register will contain the following value:
+
+|--------+--------+--------+-------+-------+--------+-------+-------|
+| RCXIEn | TCXIEn | UDRIEn | RXENn | TXENn | UCSZn2 | RXB8n | TXB8n |
+|--------+--------+--------+-------+-------+--------+-------+-------|
+| 0      |      0 |      0 |     1 |     1 |      0 |     0 | 0     |
+|--------+--------+--------+-------+-------+--------+-------+-------|
+
+#+BEGIN_SRC c
+  serial->status_control_b = 0;
+  #ifdef USART_RX_INT_ENABLE
+  serial->status_control_b |= (1<<RCXIE0);
+  #endif
+  #ifdef USART_TX_INT_ENABLE
+  serial->status_control_b |= (1<<TCXIEN0);
+  #endif
+  #ifdef USART_UDR_INT_ENABLE
+  serial->status_control_b |= (1<<UDRIE0);
+  #endif
+
+  #ifdef USART_RX_ENABLE
+  serial->status_control_b |= (1<<RXEN0);
+  #endif
+  #ifdef USART_TX_ENABLE
+  serial->status_control_b |= (1<<TXEN0);
+  #endif
+
+  #ifdef USART_CHARACTER_SIZE_9
+  serial->status_control_b |= (1<<UCSZ02);
+  #endif
+
+  /*
+  // (0<<RCXIE0) | (0<<TCXIE0) | (0<<UDRIE) |
+  | (1<<RXEN0) | (1<<TXEN0);
+  // (0<<UCSZ02) | (0<<RXB80) | (0<<TXB80);
+  ,*/
+#+END_SRC
+
+**** UCSR C
+Set the control and status register C. 
+
+- Set Async USART mode at the  Mode Select (UMSELn1 and UMSELn0) bits, value is 00.
+- Disable the Parity Mode (UPMn1 and UPMn0 bits, value is 00).
+- Select 1 stop bit (USBSn bit, value is 0).
+- Set 8 character size (UCSZn1 and UCSZn0 bits, the UCSZn2 bit is at UCSRB register, value is 011).
+- Clock polarity at rising on transmitting and falling on receiving (UCPOLn, value is 0)
+
+The register will be setted as shown in the following.
+
+|---------+---------+-------+-------+-------+--------+--------+--------|
+| UMSELn1 | UMSELn0 | UPMn1 | UPMn0 | USBSn | UCSZn1 | UCSZn0 | UCPOLn |
+|---------+---------+-------+-------+-------+--------+--------+--------|
+|       0 |       0 |     0 |     0 |     0 |      1 |      1 |      0 |
+|---------+---------+-------+-------+-------+--------+--------+--------|
+
+#+BEGIN_SRC c
+  serial->status_control_c = 0;
+
+  #ifdef USART_SYNC_MODE
+  serial->status_control_c |= (1<<UMLSEL0);
+  #endif
+  #ifdef USART_MASTER_SPI_MODE
+  serial->status_control_c |= (1<<UMLSEL1) | (1<<UMLSEL0);
+  #endif
+
+  #ifdef USART_PARITY_CHECK_ODD
+  serial->status_control_c |= (1<<UPM1) | (1<<UPM0) ;
+  #endif
+  #ifdef USART_PARITY_CHECK_EVEN
+  serial->status_control_c |= (1<<UPM1);
+  #endif
+
+  #ifdef USART_STOP_BIT_TWO
+  serial->status_control_c |= (1<<USBS0);
+  #endif
+
+  #ifdef USART_CHARACTER_SIZE_8
+  serial->status_control_c |= (1<<UCSZ01) | (1<<UCSZ00);
+  #endif
+  #ifdef USART_CHARACTER_SIZE_7
+  serial->status_control_c |= (1<<UCSZ01);
+  #endif
+  #ifdef USART_CHARACTER_SIZE_6
+  serial->status_control_c |= (1<<UCSZ00);
+  #endif
+
+  #ifdef USART_POLARITY_TX_FALLING
+  serial->status_control_c |= (1<<UCPOL0);
+  #endif
+
+
+  /*
+  | (1<<UCSZ01) | (1<<UCSZ00);
+  ,*/
+#+END_SRC
+
+**** End init
+
+#+BEGIN_SRC c
+}
+#+END_SRC
+
+
+*** Get Char
+
+#+BEGIN_SRC c
+char serial_get_char(){
+#+END_SRC
+
+Wait until the value received is ready.
+
+#+BEGIN_SRC c
+while (! (serial->status_control_a & (1<<RXC0)));
+#+END_SRC
+
+Get the character and return it.
+
+#+BEGIN_SRC c
+char c = serial->data;
+return c;
+#+END_SRC
+
+#+BEGIN_SRC c
+}
+#+END_SRC
+
+*** Put Char
+
+#+BEGIN_SRC c
+void serial_put_char(char c){
+#+END_SRC
+
+The data register must be empty, wait for it.
+
+#+BEGIN_SRC c
+while (! (serial->status_control_a & (1<<UDRE0)));
+#+END_SRC
+
+Tell the UART to send the character! Store it at the UDR0.
+
+#+BEGIN_SRC c
+serial->data = c;
+#+END_SRC
+
+Return.
+
+#+BEGIN_SRC c
+}
+#+END_SRC
+
+*** Send string
+Just take char by char and send them until the "\0" character.
+
+#+BEGIN_SRC c
+void serial_send_string(char *s){
+#+END_SRC
+
+Define the index for getting each character at zero.
+
+#+BEGIN_SRC c
+unsigned int i = 0;
+#+END_SRC
+
+Get the first character.
+
+#+BEGIN_SRC c
+char c = s[i];
+#+END_SRC
+
+If not the "\0" send it and repeat with the next character.
+
+#+BEGIN_SRC c
+  while (c){
+    serial_put_char(c);
+    i++;
+    c = s[i];
+  }
+#+END_SRC
+
+All character sendend! Return.
+
+#+BEGIN_SRC c
+}
+#+END_SRC
+
+*** Send an integer
+
+#+BEGIN_SRC c
+void serial_send_integer(int number){
+#+END_SRC
+
+Declare a string which can have the amount of characters needed for the maximum string (65536 for unsigned int of 2 bytes, plus sign and "\0" character).
+
+#+BEGIN_SRC c
+char s[100];
+#+END_SRC
+
+Help with an index.
+
+#+BEGIN_SRC c
+uint8_t i = 0;
+#+END_SRC
+
+Convert the sign and remove it from ~number~.
+
+#+BEGIN_SRC c
+  if (number < 0){
+    number = number * -1;
+    s[i] = '-';
+    i++;
+   }
+#+END_SRC
+
+Convert each of the digits. 
+
+#+BEGIN_SRC c
+  while (number) {
+#+END_SRC
+
+Get the first digit and remove it from the ~number~ variable.
+
+#+BEGIN_SRC c
+  uint8_t digit = number % 10;
+  number = number/10;
+#+END_SRC
+
+
+Transform the digit into ASCII (simply add the amount with the character '0' in ASCII).
+
+Add the character to the string and add one to the index. Repeat.
+
+#+BEGIN_SRC c
+  s[i] = digit + '0';
+  i++;
+ }
+#+END_SRC
+
+Add the "\0" character.
+
+#+BEGIN_SRC c
+s[i] = '\0';
+#+END_SRC
+
+*** Invert the String
+First ignore the sign if there are any. 
+
+#+BEGIN_SRC c
+int j = 0;
+if (s[0] == '-'){
+  j = 1;
+}
+#+END_SRC
+
+~i~ has the last position of the string. Swap the last character with the first (for example ~-54321~ \to ~-14325~). Use ~j~ to keep the left index. Repeat until the left index passes through the rignt index (when ~i > j~).
+
+#+BEGIN_SRC c
+for (i=i-1; i > j ; i--){
+  char c = s[i];
+  s[i] = s[j];
+  s[j] = c;
+  j++;
+}
+#+END_SRC
+
+Now, send the string as usual.
+
+#+BEGIN_SRC c
+  serial_send_string(s);
+#+END_SRC
+
+#+BEGIN_SRC c
+}
+#+END_SRC
+
+* Test Send
+  :PROPERTIES:
+  :header-args: :comments no :padline yes :tangle tests/usart_send.c
+  :END:
+
+  A main program to tests the functions that sends characters or strings.
+
+  
+** License
+
+  #+BEGIN_SRC c
+    /* 
+      Copyright 2019 Christian Gimenez
+   
+      Author: Christian Gimenez   
+
+      usart_send.h
+   
+      This program is free software: you can redistribute it and/or modify
+      it under the terms of the GNU General Public License as published by
+      the Free Software Foundation, either version 3 of the License, or
+      (at your option) any later version.
+   
+      This program is distributed in the hope that it will be useful,
+      but WITHOUT ANY WARRANTY; without even the implied warranty of
+      MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+      GNU General Public License for more details.
+   
+      You should have received a copy of the GNU General Public License
+      along with this program.  If not, see <http://www.gnu.org/licenses/>.
+    ,*/
+  #+END_SRC
+
+** Includes
+Include the library.
+
+#+BEGIN_SRC c
+  #include "../usart-lib.h"
+#+END_SRC
+
+** Main
+Start the main program.
+
+#+BEGIN_SRC c
+      void main(){
+#+END_SRC
+
+Initialize the USART library.
+
+#+BEGIN_SRC c
+      serial_init();
+#+END_SRC
+
+Send a character, a string and a number.
+
+#+BEGIN_SRC c
+      serial_put_char('R');
+      serial_put_char('\r');
+      serial_send_string("Hello world\n");
+      serial_send_integer(-12345);
+#+END_SRC
+
+End of the main function.
+
+#+BEGIN_SRC c
+      }
+#+END_SRC
+
+* Test with Minicom
+Use the minicom to test the program considering the following parameters and configurations: baud rate, amount of stop bits and type of parity check if enabled.
+
+For this program configuration and supposing that Arduino is connected at /dev/ttyUSB0 port, the minicom can be executed with this command:
+
+: sudo minicom -b 9600 -D /dev/ttyUSB0 
+
+Ensure that 9600 8N1 is enabled. 8N1 means:
+
+- characters of 8 bits
+- no parity checks
+- 1 stop bit 
+
+
+
+
+
+
+* Meta     :noexport:
+
+  # ----------------------------------------------------------------------
+  #+TITLE:  USART Library in C
+  #+AUTHOR: Christian Gimenez
+  #+DATE:   11 jun 2019
+  #+EMAIL:
+  #+DESCRIPTION: 
+  #+KEYWORDS: 
+
+  #+STARTUP: inlineimages hidestars content hideblocks entitiespretty indent fninline latexpreview
+  #+TODO: TODO(t!) CURRENT(c!) PAUSED(p!) | DONE(d!) CANCELED(C!@)
+  #+OPTIONS:   H:3 num:t toc:t \n:nil @:t ::t |:t ^:{} -:t f:t *:t <:t
+  #+OPTIONS:   TeX:t LaTeX:t skip:nil d:nil todo:t pri:nil tags:not-in-toc tex:imagemagick
+  #+LINK_UP:   
+  #+LINK_HOME: 
+  #+XSLT:
+
+  # -- HTML Export
+  #+INFOJS_OPT: view:info toc:t ftoc:t ltoc:t mouse:underline buttons:t path:libs/org-info.js
+  #+EXPORT_SELECT_TAGS: export
+  #+EXPORT_EXCLUDE_TAGS: noexport
+  #+HTML_LINK_UP: index.html
+  #+HTML_LINK_HOME: index.html
+
+  # -- For ox-twbs or HTML Export
+  #+HTML_HEAD: <link href="../../libs/bootstrap.min.css" rel="stylesheet">
+  #+HTML_HEAD: <script src="../../libs/jquery.min.js"></script> 
+  #+HTML_HEAD: <script src="../../libs/bootstrap.min.js"></script>
+  #+LANGUAGE: en
+
+  # Local Variables:
+  # org-hide-emphasis-markers: t
+  # org-use-sub-superscripts: "{}"
+  # fill-column: 80
+  # visual-line-fringe-indicators: t
+  # ispell-local-dictionary: "british"
+  # End:
