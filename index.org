@@ -1,5 +1,14 @@
 Examples made for the Arduino board.
 
+* C
+
+- Libraries
+  - [[file:C/libs/usart-lib.org][UART Library]]
+- [[file:C/echo/index.org][Serial Echo Example]] (UART example)
+
+
+* Assembler
+
 - [[file:sound-sensor/sound-sensor.org][Sound Sensor Example]] (ADC example)
 - [[file:echo/echo.org][Serial Echo Example]] (UART example) 
 - [[file:servo/servo.org][Servo Motor Example]] (PWM example)
