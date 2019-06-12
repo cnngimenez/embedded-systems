@@ -1,0 +1,382 @@
+The servo motor uses a PWM signal communication. This protocol consist of a message sended between a period according to the rise or fall of the edges. This period is controlled with a clock which is used for counting the amount of clicles a rising or falling edge has.
+
+The following is a Figure that illustrates how the signal has to be sended.
+
+[[file:Sinais_controle_servomotor.JPG]]
+
+The time of the period is 20ms. In this time, a signal of certain length has to be sended according to the instruction given. If a signal of 1500\mu{}s is given, the servo will be commanded to retain the central position, if a 2000\mu{}s signal is provided, the servo turns 90 degrees.
+
+The ATmega processors provides with timers that can help developers to create waves of certain periods. The idea is to set a signal into a rise/fall value at determined amount of clock cicles, then fall/rise it..
+
+These timers has the following registers:
+
+- TCCRnA :: Control the wave generation mode and the compare output mode.
+- TCCRnB :: Control the presample and the wave genetarion mode.
+- ICRnH and ICRnL :: Used to set the top value.
+- OCRnAH and OCRnAL :: Set the amount of cicles to count.
+
+Also, it is needed to control the pin directions. ODDRB can be used at the Arduino UNO to control de 9th pin at the board (PB1 output at the Atmel processor). 
+
+* Driver Header
+:PROPERTIES:
+:header-args: :tangle servo.h :comments no :padline yes
+:END:
+
+** Initialize header
+Do not add the header more than once.
+
+#+BEGIN_SRC c
+#ifndef _SERVO_H
+#define _SERVO_H 1
+#+END_SRC
+
+** Declare methods
+
+#+BEGIN_SRC c
+void servo_init();
+void servo_rotate_90();
+void servo_rotate_m90();
+void servo_rotate_180();
+void servo_rotate_270();
+void servo_rotate_360();
+#+END_SRC
+
+** End header
+#+BEGIN_SRC c
+#endif // _SERVO_H
+#+END_SRC
+
+
+* Driver Body
+:PROPERTIES:
+:header-args: :tangle servo.c :comments no :padline yes
+:END:
+
+** Include headers
+Include AVR I/O ports names.
+
+#+BEGIN_SRC c
+#include <avr/io.h>
+#+END_SRC
+
+Include subtype of integers.
+
+#+BEGIN_SRC c
+#include <stdint.h>
+#+END_SRC
+
+Include the driver's header.
+
+#+BEGIN_SRC c
+#include "servo.h"
+#+END_SRC
+
+** Structure
+The register are the following.
+
+|---------+--------+-------------|
+| Address | Name   | Description |
+|---------+--------+-------------|
+|    0x80 | TCCR1A |             |
+|    0x81 | TCCR1B |             |
+|    0x82 | TCCR1C |             |
+|    0X83 |        | Reserved    |
+|    0x84 | TCNT1L |             |
+|    0x85 | TCNT1H |             |
+|    0x86 | ICR1L  |             |
+|    0x87 | ICR1H  |             |
+|    0x88 | OCR1AL |             |
+|    0x89 | OCR1AH |             |
+|    0x8a | OCR1BL |             |
+|    0x8b | OCR1BH |             |
+|---------+--------+-------------|
+
+#+BEGIN_SRC c
+typedef struct {
+  uint8_t control_a; // TCCR1A
+  uint8_t control_b; // TCCR1B
+  uint8_t control_c; // TCCR1C
+  uint8_t reserved1; 
+  uint16_t counter_h; //TCNT1
+  uint16_t input_capture; // ICR1
+  uint16_t output_compare_a; // OCR1A
+  uint16_t output_compare_b; // OCR1B
+} volatile servo_t;
+#+END_SRC
+
+Map the structure starting from the 0x80 address.
+
+#+BEGIN_SRC c
+  volatile servo_t *servo = (servo_t*) (0x80);
+#+END_SRC
+
+** Initialization
+
+*** Start the method
+Start the initialization method.
+
+#+BEGIN_SRC c
+void servo_init(){
+#+END_SRC
+
+Zero the control registers.
+
+#+BEGIN_SRC c
+servo->control_a = 0;
+servo->control_b = 0;
+#+END_SRC
+
+
+*** Compare Output Mode
+The clock must be at high state when starting and low when the counter matches. This is setted at the *COM1A1 and COM1A0* bits at the TCCR1A register.
+
+The mode needed for this non-inverting mode is the following:
+
+|------------+------------|
+| COM1A1     | COM1A0     |
+| (TCCR1A:7) | (TCCR1A:6) |
+|------------+------------|
+| 1          | 0          |
+|------------+------------|
+
+Here is the full list of modes according to the ATmega 328P datasheet.
+
+|---------------+---------------+-------------------------------------------------------------|
+| COM1A1/COM1B1 | COM1A0/COM1B0 | Description                                                 |
+|---------------+---------------+-------------------------------------------------------------|
+|             0 |             0 | Normal port operation, OC1A/OC1B disconnected.              |
+|             0 |             1 | Toggle OC1A/OC1B on Compare Match.                          |
+|             1 |             0 | Clear OC1A/OC1B on Compare Match (Set output to low level). |
+|             1 |             1 | Set OC1A/OC1B on Compare Match (Set output to high level).  |
+|---------------+---------------+-------------------------------------------------------------|
+
+The followng code sets the COM1A1 and COM1A0 to the needed mode.
+
+#+BEGIN_SRC c
+servo->control_a |= (1<<COM1A1);
+servo->control_a |= (1<<COM1B1);
+#+END_SRC
+
+*** Wavefor Generation Mode
+The mode for the explained behaviour at section [[*Compare Output Mode][Compare Output Mode]] is called WGM 14 (Waveform Generation Mode 14) . 
+
+For this, the WGM13, WGM12 and WGM11 bits must be setted to 1. This fields are at the TCCR1A and TCCR1B register.
+
+Then, the following must be setted:
+
+|------------+------------+------------+-----------|
+| WGM13      | WGM12      | WGM11      | WGM10     |
+| (TCCR1B:4) | (TCCR1B:3) | (TCCR1A:1) | (TCCR1A0) |
+|------------+------------+------------+-----------|
+| 1          | 1          | 1          | 0         |
+|------------+------------+------------+-----------|
+
+Refer to the ATmega 328P datasheet for more modes specifications. Regarding this mode, this extract from the datasheet table indicate the following:
+
+|------+-------+--------+---------+---------+--------------------+------+-----------+------------|
+| Mode | WGM13 | WGM12  | WGM11   | WGM10   | Timer/Counter Mode | TOP  | Update of | TOV1 flagn |
+|      |       | (CTC1) | (PWM11) | (PWM10) | of Operation       |      | OCR1x at  | set on     |
+|------+-------+--------+---------+---------+--------------------+------+-----------+------------|
+|   14 |     1 | 1      | 1       | 0       | Fast PWM           | ICR1 | BOTTOM    | TOP        |
+|------+-------+--------+---------+---------+--------------------+------+-----------+------------|
+
+
+The code for setting this mode is the following.
+
+#+BEGIN_SRC c
+servo->control_b |= (1<<WGM13) | (1<<WGM12);
+servo->control_a |= (1<<WGM11);
+#+END_SRC
+
+*** Top value
+The TOP value is setted at the Input Capture Register (ICR1) register. Depending on the mode this behaviour can change, but for the WGM 14 mode, the table at the datasheet indicates that the TOP is at ICR1.
+
+Servo motor works with a period of 20ms. The counter must be set that the TOP value resets the counter to 0 when arriving the needed amount of cicles for achieving 20ms.
+
+The calculation is based on the 16MHz of the clock, meaning 1000ms there is 16000000 cicles. For achieving 1ms, the clock must do 16000 cicles, this means that 320000 cicles are needed for 20ms.
+
+A 16 bit register can be used to count up to 65535 cicles. For this reason, a presample must be used to reduce the amount of cicles to count. Doing a presamle of 64 cicles means that the counter will increment one when 64 cicles of clock is achieved (like one presampled cicle will last for 64 cicles of clock).
+
+This will change our values: A millisecond is 16000/64 = 250 cicles, and 20 milliseconds is 250 * 20 = 5000 presampled cicles to count.
+
+#+BEGIN_SRC c
+servo->input_capture = 4999;
+#+END_SRC
+
+*** Presample
+The presample is setted at the TCCR1B register on the CS12, CS11 and CS10 bits.
+
+The following value will set the presample at 1/64 cicles.
+
+|------------+------------+------------|
+| CS12       | CS11       | CS10       |
+| (TCCR1B:2) | (TCCR1B:1) | (TCCR1B:0) |
+|------------+------------+------------|
+| 0          | 1          | 1          |
+|------------+------------+------------|
+
+#+BEGIN_SRC c
+servo->control_b |= (0<<CS12) | (1<<CS11) | (1<<CS10);
+#+END_SRC
+
+*** Set Pin Direction
+The 9th pin at the Arduino UNO board is at the PB1 output of the Atmel processor. The direction for this port is controlled at the DDRB register at the first bit. Setting it to 1 means it will be used as an output port.
+
+#+BEGIN_SRC c
+volatile uint8_t *ddb = (uint8_t*) (0x24);
+*ddb |= (1<<DDB1);
+#+END_SRC
+
+
+
+*** End function
+#+BEGIN_SRC c
+} // servo_init
+#+END_SRC
+
+** Rotate 90
+Moving the servo motor requires to set the OCR1A 16-bit register with a value that the counter can use to follow the 1ms, 1.5ms or 2ms for -90, 0, 90 degrees movement respectivelly.
+
+Considering that 16000/64 = 250 cicles are needed for a millisecond, then 1.5 milliseconds is 250+250/2 = 375 cicles and 2ms is 500 cicles.
+
+First, declare the function.
+
+#+BEGIN_SRC c
+void servo_rotate_90(){
+#+END_SRC
+
+For rotating 90°, 500 cicles (2ms) is needed. This code will set the OCR1A register into 500 cicles. 
+
+#+BEGIN_SRC c
+servo->output_compare_a = 500;
+#+END_SRC
+
+End the function.
+
+#+BEGIN_SRC c
+} // servo_rotate_90
+#+END_SRC
+
+** Rotate -90
+Same as before. 
+
+#+BEGIN_SRC c
+void servo_rotate_m90(){
+  servo->output_compare_a = 250;
+}
+#+END_SRC
+
+** Rotate 180
+
+#+BEGIN_SRC c
+void servo_rotate_180(){
+ servo->output_compare_a = 750;
+}
+void servo_rotate_m180(){
+  servo->output_compare_a = 150;
+}
+#+END_SRC
+
+* Main file
+:PROPERTIES:
+:header-args: :comments no :padline yes :tangle main.c
+:END:
+
+Include the servo driver explained above.
+
+#+BEGIN_SRC c
+#include "servo.h"
+#include <avr/io.h>
+#+END_SRC
+
+Use the led to indicate that the servo is waiting.
+
+#+BEGIN_SRC c
+volatile uint8_t *ddb = (uint8_t*) (0x24);
+volatile uint8_t *portb = (uint8_t*) (0x25);
+#+END_SRC
+
+Start the main function.
+
+#+BEGIN_SRC c
+void main(){
+#+END_SRC
+
+Set the 5th led to output.
+
+#+BEGIN_SRC c
+*ddb |= (1<<DDB5);
+*portb &= 0b11011111;
+#+END_SRC
+
+
+Initialize the servo driver.
+
+#+BEGIN_SRC c
+servo_init();
+#+END_SRC
+
+Rotate 90 degrees.
+
+#+BEGIN_SRC c
+for (;;){
+  *portb |= (1<<PORTB5);
+  servo_rotate_90();
+  for (unsigned long i=0; i < 1000000; i++);
+  *portb &= 0b11011111;
+  servo_rotate_m90();
+  for (unsigned long i=0; i < 1000000; i++);
+  servo_rotate_180();
+  for (unsigned long i=0; i < 1000000; i++);
+  servo_rotate_m180();
+  for (unsigned long i=0; i < 1000000; i++);
+  }
+#+END_SRC
+
+End the main function.
+
+#+BEGIN_SRC c
+} // main
+#+END_SRC
+
+
+
+
+* Meta     :noexport:
+
+  # ----------------------------------------------------------------------
+  #+TITLE:  Servo Motor Example
+  #+AUTHOR: Christian Gimenez
+  #+DATE:   11 jun 2019
+  #+EMAIL:
+  #+DESCRIPTION: 
+  #+KEYWORDS: 
+
+  #+STARTUP: inlineimages hidestars content hideblocks entitiespretty indent fninline latexpreview
+  #+TODO: TODO(t!) CURRENT(c!) PAUSED(p!) | DONE(d!) CANCELED(C!@)
+  #+OPTIONS:   H:3 num:t toc:t \n:nil @:t ::t |:t ^:{} -:t f:t *:t <:t
+  #+OPTIONS:   TeX:t LaTeX:t skip:nil d:nil todo:t pri:nil tags:not-in-toc tex:imagemagick
+  #+LINK_UP:   
+  #+LINK_HOME: 
+  #+XSLT:
+
+  # -- HTML Export
+  #+INFOJS_OPT: view:info toc:t ftoc:t ltoc:t mouse:underline buttons:t path:libs/org-info.js
+  #+EXPORT_SELECT_TAGS: export
+  #+EXPORT_EXCLUDE_TAGS: noexport
+  #+HTML_LINK_UP: index.html
+  #+HTML_LINK_HOME: index.html
+
+  # -- For ox-twbs or HTML Export
+  #+HTML_HEAD: <link href="libs/bootstrap.min.css" rel="stylesheet">
+  #+HTML_HEAD: <script src="libs/jquery.min.js"></script> 
+  #+HTML_HEAD: <script src="libs/bootstrap.min.js"></script>
+  #+LANGUAGE: en
+
+  # Local Variables:
+  # org-hide-emphasis-markers: t
+  # org-use-sub-superscripts: "{}"
+  # fill-column: 80
+  # visual-line-fringe-indicators: t
+  # ispell-local-dictionary: "british"
+  # End:
