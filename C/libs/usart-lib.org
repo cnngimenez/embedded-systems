@@ -51,6 +51,8 @@ Include the math library for the ~round()~ function.
 ** Configuration constants
 These constants must be setted accordingly before using the library.
 
+*** Frequency
+
 #+BEGIN_SRC c
 #define OSC_FREQUENCY 16000000UL // 16MHz
 #define BAUD_RATE 9600 // bps
@@ -67,6 +69,7 @@ When having problems, set the BRR_VALUE directly with the constant without any e
 #define BRR_VALUE (unsigned long) round(OSC_FREQUENCY/16.0/BAUD_RATE) - 1
 #+END_SRC
 
+*** Reception and Transmission
 Enable transmission and reception. 
 
 #+BEGIN_SRC c
@@ -74,6 +77,7 @@ Enable transmission and reception.
 #define USART_TX_ENABLE 1
 #+END_SRC
 
+*** Interruptions
 Disable interruptions for receiving, transmiting and UDR (non empty data received). Keep the definitions in case the developer want to use them.
 
 #+BEGIN_SRC c
@@ -82,7 +86,7 @@ Disable interruptions for receiving, transmiting and UDR (non empty data receive
 // #define USART_UDR_INT_ENABLE 1
 #+END_SRC
 
-
+*** Mode
 Enable 8 bit character size
 
 #+BEGIN_SRC c
@@ -123,8 +127,53 @@ Set the clock polarity for using the rising edge when transmitting and falling e
 // #define USART_POLARITY_TX_FALLING 1
 #+END_SRC
 
+*** USART 1
+Include USART 1 configuration if USART 1 is enable.
+
+#+BEGIN_SRC c
+  /*
+   Uncomment this for enabling USART 1 registers and methods.
+   Its mode is configure at the usart_1_config.h file.
+  ,*/
+  // #define USART_1
+
+  #ifdef USART_1
+  #include "usart_1_config.h"
+  #endif
+#+END_SRC
+
+*** USART 2
+Include USART 2 configuration if USART 2 is enable.
+
+#+BEGIN_SRC c
+  /*
+   Uncomment this for enabling USART 2 registers and methods.
+   Its mode is configure at the usart_2_config.h file.
+  ,*/
+  // #define USART_2
+
+  #ifdef USART_2
+  #include "usart_2_config.h"
+  #endif
+#+END_SRC
+
+*** USART 3
+Include USART 3 configuration if USART 3 is enable.
+
+#+BEGIN_SRC c
+  /*
+   Uncomment this for enabling USART 3 registers and methods.
+   Its mode is configure at the usart_3_config.h file.
+  ,*/
+  // #define USART_3
+
+  #ifdef USART_3
+  #include "usart_3_config.h"
+  #endif
+#+END_SRC
+
 ** Define methods
-Initialize the serial registers. 
+Initialize the serial registers. If ~USART_n~ constants are enabled, the other USARTn registers are initialized too.
 
 #+BEGIN_SRC c
 void serial_init();
@@ -174,11 +223,355 @@ Send an integer number. This converts the number into a string and sends it.
 void serial_send_integer(int number);
 #+END_SRC
 
+
+*** USARTn macros
+These macros helps in the definition of the same functions applied to other USARTn registers.
+
+**** Receive data
+
+#+BEGIN_SRC c
+#define GET_CHAR_FNC(N) char serial ##N## _get_char();
+#define GET_LINE_FNC(N) char* serial  ##N## _get_line();
+#define GET_STRING_FNC(N) char* serial ##N## _get_string();
+#define GET_INTEGER_FNC(N) int serial ##N## _get_integer();
+#+END_SRC
+
+**** Send data
+
+#+BEGIN_SRC c
+#define PUT_CHAR_FNC(N) void serial ##N## _put_char(char c);
+#define SEND_STRING_FNC(N) void serial ##N## _send_string(char *s);
+#define SEND_INTEGER_FNC(N) void serial ##N## _send_integer(int number);
+#+END_SRC
+
+
+*** USART 1
+When ~USART_1~ macro is defined, enable the same functions with ~serial1~ prefix.
+
+#+BEGIN_SRC c
+#ifdef USART_1
+#+END_SRC
+
+**** Receive data
+
+#+BEGIN_SRC c
+GET_CHAR_FNC(1)
+GET_LINE_FNC(1)
+GET_STRING_FNC(1)
+GET_INTEGER_FNC(1)
+#+END_SRC
+
+**** Send data
+
+#+BEGIN_SRC c
+PUT_CHAR_FNC(1)
+SEND_STRING_FNC(1)
+SEND_INTEGER_FNC(1)
+#+END_SRC
+
+**** End USART 1
+
+#+BEGIN_SRC c
+#endif 
+#+END_SRC
+
+*** USART 2
+When ~USART_2~ macro is defined, enable the same functions with ~serial2~ prefix.
+
+#+BEGIN_SRC c
+#ifdef USART_2
+#+END_SRC
+
+**** Receive data
+
+#+BEGIN_SRC c
+GET_CHAR_FNC(2)
+GET_LINE_FNC(2)
+GET_STRING_FNC(2)
+GET_INTEGER_FNC(2)
+#+END_SRC
+
+**** Send data
+
+#+BEGIN_SRC c
+PUT_CHAR_FNC(2)
+SEND_STRING_FNC(2)
+SEND_INTEGER_FNC(2)
+#+END_SRC
+
+**** End USART 2
+
+#+BEGIN_SRC c
+#endif 
+#+END_SRC
+
+*** USART 3
+When ~USART_3~ macro is defined, enable the same functions with ~serial3~ prefix.
+
+#+BEGIN_SRC c
+#ifdef USART_3
+#+END_SRC
+
+**** Receive data
+
+#+BEGIN_SRC c
+GET_CHAR_FNC(3)
+GET_LINE_FNC(3)
+GET_STRING_FNC(3)
+GET_INTEGER_FNC(3)
+#+END_SRC
+
+**** Send data
+
+#+BEGIN_SRC c
+PUT_CHAR_FNC(3)
+SEND_STRING_FNC(3)
+SEND_INTEGER_FNC(3)
+#+END_SRC
+
+**** End USART 3
+
+#+BEGIN_SRC c
+#endif 
+#+END_SRC
+
 ** End header
 
 #+BEGIN_SRC c
 #endif // _USART_LIB_H
 #+END_SRC
+
+** USART 1 configuration
+:PROPERTIES:
+:header-args: :comments no :padline yes :tangle usart_1_config.h
+:END:
+
+The USART 1 has the same configuration as the USART 0.
+
+*** Frequency
+
+#+BEGIN_SRC c
+#define USART1_OSC_FREQUENCY 16000000UL // 16MHz
+#define USART1_BAUD_RATE 9600 // bps
+#+END_SRC
+
+#+BEGIN_SRC c
+// Apply the UBRR formulae according to the Atmega 328 datasheet.
+#define USART1_BRR_VALUE (unsigned long) round(USART1_OSC_FREQUENCY/16.0/USART1_BAUD_RATE) - 1
+#+END_SRC
+
+*** Reception and Transmission
+Enable transmission and reception. 
+
+#+BEGIN_SRC c
+#define USART1_RX_ENABLE 1
+#define USART1_TX_ENABLE 1
+#+END_SRC
+
+*** Interruptions
+Disable interruptions for receiving, transmiting and UDR (non empty data received). Keep the definitions in case the developer want to use them.
+
+#+BEGIN_SRC c
+// #define USART1_RX_INT_ENABLE_1 1
+// #define USART1_TX_INT_ENABLE_1 1
+// #define USART1_UDR_INT_ENABLE_1 1
+#+END_SRC
+
+*** Mode
+Enable 8 bit character size
+
+#+BEGIN_SRC c
+// #define USART1_CHARACTER_SIZE_5 1
+// #define USART1_CHARACTER_SIZE_6 1
+// #define USART1_CHARACTER_SIZE_7 1
+#define USART1_CHARACTER_SIZE_8 1
+// #define USART1_CHARACTER_SIZE_9 1
+#+END_SRC
+
+Enable Async USART.
+
+#+BEGIN_SRC c
+#define USART1_ASYNC_MODE 1
+// #define USART1_SYNC_MODE 1
+// #define USART1_MASTER_SPI_MODE 1
+#+END_SRC
+
+Disable parity check. Declare the other parity just in case the developers want to use them.
+
+#+BEGIN_SRC c
+#define USART1_PARITY_CHECK_DISABLE 1
+// #define USART1_PARITY_CHECK_ODD 1
+// #define USART1_PARITY_CHECK_EVEN 1
+#+END_SRC
+
+Set one stop bit. Define the 2 stop bits in case the developers want to use them.
+
+#+BEGIN_SRC c
+#define USART1_STOP_BIT_ONE 1
+// #define USART1_STOP_BIT_TWO 1
+#+END_SRC
+
+Set the clock polarity for using the rising edge when transmitting and falling edge when recieving.
+
+#+BEGIN_SRC c
+#define USART1_POLARITY_TX_RISING 1
+// #define USART1_POLARITY_TX_FALLING 1
+#+END_SRC
+
+** USART 2 configuration
+:PROPERTIES:
+:header-args: :comments no :padline yes :tangle usart_2_config.h
+:END:
+
+The USART 2 has the same configuration as the USART 0.
+
+*** Frequency
+
+#+BEGIN_SRC c
+#define USART2_OSC_FREQUENCY 16000000UL // 16MHz
+#define USART2_BAUD_RATE_2 9600 // bps
+#+END_SRC
+
+#+BEGIN_SRC c
+// Apply the UBRR formulae according to the Atmega 328 datasheet.
+#define USART2_BRR_VALUE (unsigned long) round(USART2_OSC_FREQUENCY/16.0/USART2_BAUD_RATE) - 1
+#+END_SRC
+
+*** Reception and Transmission
+Enable transmission and reception. 
+
+#+BEGIN_SRC c
+#define USART2_RX_ENABLE 1
+#define USART2_TX_ENABLE 1
+#+END_SRC
+
+*** Interruptions
+Disable interruptions for receiving, transmiting and UDR (non empty data received). Keep the definitions in case the developer want to use them.
+
+#+BEGIN_SRC c
+// #define USART2_RX_INT_ENABLE 1
+// #define USART2_TX_INT_ENABLE 1
+// #define USART2_UDR_INT_ENABLE 1
+#+END_SRC
+
+*** Mode
+Enable 8 bit character size
+
+#+BEGIN_SRC c
+// #define USART2_CHARACTER_SIZE_5 1
+// #define USART2_CHARACTER_SIZE_6 1
+// #define USART2_CHARACTER_SIZE_7 1
+#define USART2_CHARACTER_SIZE_8 1
+// #define USART2_CHARACTER_SIZE_9 1
+#+END_SRC
+
+Enable Async USART.
+
+#+BEGIN_SRC c
+#define USART2_ASYNC_MODE 1
+// #define USART2_SYNC_MODE 1
+// #define USART2_MASTER_SPI_MODE 1
+#+END_SRC
+
+Disable parity check. Declare the other parity just in case the developers want to use them.
+
+#+BEGIN_SRC c
+#define USART2_PARITY_CHECK_DISABLE 1
+// #define USART2_PARITY_CHECK_ODD 1
+// #define USART2_PARITY_CHECK_EVEN 1
+#+END_SRC
+
+Set one stop bit. Define the 2 stop bits in case the developers want to use them.
+
+#+BEGIN_SRC c
+#define USART2_STOP_BIT_ONE 1
+// #define USART2_STOP_BIT_TWO 1
+#+END_SRC
+
+Set the clock polarity for using the rising edge when transmitting and falling edge when recieving.
+
+#+BEGIN_SRC c
+#define USART2_POLARITY_TX_RISING 1
+// #define USART2_POLARITY_TX_FALLING 1
+#+END_SRC
+
+** USART 3 configuration
+:PROPERTIES:
+:header-args: :comments no :padline yes :tangle usart_3_config.h
+:END:
+
+The USART 3 has the same configuration as the USART 0.
+
+*** Frequency
+
+#+BEGIN_SRC c
+#define USART3_OSC_FREQUENCY 16000000UL // 16MHz
+#define USART3_BAUD_RATE 9600 // bps
+#+END_SRC
+
+#+BEGIN_SRC c
+// Apply the UBRR formulae according to the Atmega 328 datasheet.
+#define USART3_BRR_VALUE (unsigned long) round(USART3_OSC_FREQUENCY/16.0/USART3_BAUD_RATE) - 1
+#+END_SRC
+
+*** Reception and Transmission
+Enable transmission and reception. 
+
+#+BEGIN_SRC c
+#define USART3_RX_ENABLE 1
+#define USART3_TX_ENABLE 1
+#+END_SRC
+
+*** Interruptions
+Disable interruptions for receiving, transmiting and UDR (non empty data received). Keep the definitions in case the developer want to use them.
+
+#+BEGIN_SRC c
+// #define USART3_RX_INT_ENABLE 1
+// #define USART3_TX_INT_ENABLE 1
+// #define USART3_UDR_INT_ENABLE 1
+#+END_SRC
+
+*** Mode
+Enable 8 bit character size
+
+#+BEGIN_SRC c
+// #define USART3_CHARACTER_SIZE_5 1
+// #define USART3_CHARACTER_SIZE_6 1
+// #define USART3_CHARACTER_SIZE_7 1
+#define USART3_CHARACTER_SIZE_8 1
+// #define USART3_CHARACTER_SIZE_9 1
+#+END_SRC
+
+Enable Async USART.
+
+#+BEGIN_SRC c
+#define USART3_ASYNC_MODE 1
+// #define USART3_SYNC_MODE 1
+// #define USART3_MASTER_SPI_MODE 1
+#+END_SRC
+
+Disable parity check. Declare the other parity just in case the developers want to use them.
+
+#+BEGIN_SRC c
+#define USART3_PARITY_CHECK_DISABLE 1
+// #define USART3_PARITY_CHECK_ODD 1
+// #define USART3_PARITY_CHECK_EVEN 1
+#+END_SRC
+
+Set one stop bit. Define the 2 stop bits in case the developers want to use them.
+
+#+BEGIN_SRC c
+#define USART3_STOP_BIT_ONE 1
+// #define USART3_STOP_BIT_TWO 1
+#+END_SRC
+
+Set the clock polarity for using the rising edge when transmitting and falling edge when recieving.
+
+#+BEGIN_SRC c
+#define USART3_POLARITY_TX_RISING 1
+// #define USART3_POLARITY_TX_FALLING 1
+#+END_SRC
+
 
 * Body
   :PROPERTIES:
@@ -224,7 +617,23 @@ Inlude AVR I/O register and bit names (like ~RXEN0~).
 #+END_SRC
 
 ** Structure
-This structure maps directly to the memory register map needed to set the USART configuration.
+This sections explains a structure that maps directly to the memory register. It is used to set the USART configuration.
+
+These are the affected registers for ATmega 328p.
+
+|---------+--------+--------------------------|
+| Address | Name   | Description              |
+|---------+--------+--------------------------|
+|    0xc6 | UDR0   | USART Data Register.     |
+|    0xc5 | UBRR0H | Configure the Baud Rate. |
+|    0xc4 | UBRR0L |                          |
+|    0xc3 | -      | Reserved                 |
+|    0xc2 | UCSR0C | Configure the mode.      |
+|    0xc1 | UCSR0B |                          |
+|    0xc0 | UCSR0A |                          |
+|---------+--------+--------------------------|
+
+The structure is as follows. Read their fields in the inverse order of the register (i.e. UCSR0A is the ~status_control_a~ field).
 
 #+BEGIN_SRC c
      typedef struct {
@@ -238,11 +647,35 @@ This structure maps directly to the memory register map needed to set the USART 
      } volatile uart_t;
 #+END_SRC
 
-Map the structure starting from the 0xc0 address.
+Map the structure starting from the 0xc0 address to match the ATmega 328p.
    
 #+BEGIN_SRC c
      volatile uart_t *serial = (uart_t*) (0xc0);
 #+END_SRC
+
+The following structure match the ATmega 2549. This processor has four USART.
+
+|----------------+--------------+--------------|
+| Starting Addr. | Ending Addr. | USART Number |
+|----------------+--------------+--------------|
+|           0xc0 |         0xc6 | USART 0      |
+|           0xc8 |         0xce | USART 1      |
+|           0xd0 |         0xd6 | USART 2      |
+|          0x130 |        0x136 | USART 3      |
+|----------------+--------------+--------------|
+
+#+BEGIN_SRC c
+  #ifdef USART_1
+  volatile uart_t *serial_1 = (uart_t*) (0xc8);
+  #endif
+  #ifdef USART_2
+  volatile uart_t *serial_2 = (uart_t*) (0xd0);
+  #endif
+  #ifdef USART_3
+  volatile uart_t *serial_3 = (uart_t*) (0x130);
+  #endif
+#+END_SRC
+
 
 ** Implement methods
 
@@ -260,25 +693,57 @@ serial->baud_rate_l = (unsigned char) BRR_VALUE;
 #+END_SRC
 
 **** UCSR A
-There is no need to set any bit at the status register A.
+There are three USART Control and Status Register (UCSR). The UCSRnA is the first one that has the following bits:
+
+|---------+------+------+-------+-----+------+------+------+-------|
+| Name:   | RXCn | TXCn | UDREn | FEn | DORn | UPEn | U2Xn | MPCMn |
+|---------+------+------+-------+-----+------+------+------+-------|
+| /       | <    |      |       |     |      |      |      | >     |
+| R/W:    | R    | RW   | R     | R   | R    | R    | RW   | RW    |
+|---------+------+------+-------+-----+------+------+------+-------|
+| I. V. : | 0    | 0    | 1     | 0   | 0    | 0    | 0    | 0     |
+|---------+------+------+-------+-----+------+------+------+-------|
+(I.V.: Initial Value)
+
+- RXCn :: Receive Complete.
+- TXCn :: Transmit Complete.
+- UDREn :: Data Register Empty.
+- FEn :: Frame Error
+- DORn :: Data OverRun
+- UPEn :: USART Parity Error
+- U2Xn :: Double the USART transmition speed.
+- MPCMn :: MultiProcessor Communication Mode.
+
+Most of this bits are readonly. There is no need to set them because the initial values are right.
+
+Latter, the RXCn and the TXCn must be used for check if a character has been received or for start transmitting.
+
 
 **** UCSR B
- Set the control and status register B for:
+This register control the interruptions, the transmission and reception of data and one of the bits that controls the size of each character.
 
-- Disable interruptions (RCXIE, TCXIE and UDRIE).
-- Enabling receiver and transmitter (RXEN and TXEN bits).
-- 8bit Character size (UCSZ2 bit, the rest are on the UCSR C register).
-
-Thus, the register will contain the following value:
+By default, this library has macros setted for the following values. 
 
 |--------+--------+--------+-------+-------+--------+-------+-------|
 | RCXIEn | TCXIEn | UDRIEn | RXENn | TXENn | UCSZn2 | RXB8n | TXB8n |
 |--------+--------+--------+-------+-------+--------+-------+-------|
-| 0      |      0 |      0 |     1 |     1 |      0 |     0 | 0     |
+| RW     | RW     | RW     | RW    | RW    | RW     | R     | RW    |
 |--------+--------+--------+-------+-------+--------+-------+-------|
+| 0      | 0      | 0      | 1     | 1     | 0      | 0     | 0     |
+|--------+--------+--------+-------+-------+--------+-------+-------|
+
+In the following code, it will set the value according to the macros defined at the header. 
+Also, for readability, the syntax used for setting the bits is the following: ~register |= (1<<BITNUMBER)~. To achieve better performance, the compiler translate this into the proper number depending on the bit number. For instance: ~(1<<RXEN0)~ where ~RXEN0~ is equal to 4 is compiled into the assembler instruction ~ori r18, lo8(16)~ (16 = 0b10000) instead of 4 shift lefts instructions.
+
+First, clear the register.
 
 #+BEGIN_SRC c
   serial->status_control_b = 0;
+#+END_SRC
+
+Set the interruptions enable according to the macros.
+
+#+BEGIN_SRC c
   #ifdef USART_RX_INT_ENABLE
   serial->status_control_b |= (1<<RCXIE0);
   #endif
@@ -288,24 +753,32 @@ Thus, the register will contain the following value:
   #ifdef USART_UDR_INT_ENABLE
   serial->status_control_b |= (1<<UDRIE0);
   #endif
+#+END_SRC
 
+Set the receiving and transmitting enable.
+
+#+BEGIN_SRC c
   #ifdef USART_RX_ENABLE
   serial->status_control_b |= (1<<RXEN0);
   #endif
   #ifdef USART_TX_ENABLE
   serial->status_control_b |= (1<<TXEN0);
   #endif
-
-  #ifdef USART_CHARACTER_SIZE_9
-  serial->status_control_b |= (1<<UCSZ02);
-  #endif
-
   /*
   // (0<<RCXIE0) | (0<<TCXIE0) | (0<<UDRIE) |
   | (1<<RXEN0) | (1<<TXEN0);
   // (0<<UCSZ02) | (0<<RXB80) | (0<<TXB80);
   ,*/
 #+END_SRC
+
+Finally, if the macro ~USART_CHARACTER_SIZE_9~ is setted, change the UCSZ02 bit.
+
+#+BEGIN_SRC c
+  #ifdef USART_CHARACTER_SIZE_9
+  serial->status_control_b |= (1<<UCSZ02);
+  #endif
+#+END_SRC
+
 
 **** UCSR C
 Set the control and status register C. 
@@ -365,6 +838,280 @@ The register will be setted as shown in the following.
   ,*/
 #+END_SRC
 
+
+**** USART 1
+Apply the configuration for this USARTn structure.
+
+***** UBBR
+
+#+BEGIN_SRC c
+serial1->baud_rate_h = (unsigned char) (USART1_BRR_VALUE>>8);
+serial1->baud_rate_l = (unsigned char) USART1_BRR_VALUE;
+#+END_SRC
+
+***** UCSR A
+Most of this bits are readonly. There is no need to set them because the initial values are right.
+
+***** UCSR B
+First, clear the register.
+
+#+BEGIN_SRC c
+  serial1->status_control_b = 0;
+#+END_SRC
+
+Set the interruptions enable according to the macros.
+
+#+BEGIN_SRC c
+  #ifdef USART1_RX_INT_ENABLE
+  serial1->status_control_b |= (1<<USART1_RCXIE0);
+  #endif
+  #ifdef USART1_TX_INT_ENABLE
+  serial1->status_control_b |= (1<<USART1_TCXIEN0);
+  #endif
+  #ifdef USART1_UDR_INT_ENABLE
+  serial1->status_control_b |= (1<<USART1_UDRIE0);
+  #endif
+#+END_SRC
+
+Set the receiving and transmitting enable.
+
+#+BEGIN_SRC c
+  #ifdef USART1_RX_ENABLE
+  serial1->status_control_b |= (1<<USART1_RXEN0);
+  #endif
+  #ifdef USART1_TX_ENABLE
+  serial1->status_control_b |= (1<<USART1_TXEN0);
+  #endif
+#+END_SRC
+
+Finally, if the macro ~USART1_CHARACTER_SIZE_9~ is setted, change the UCSZ02 bit.
+
+#+BEGIN_SRC c
+  #ifdef USART1_CHARACTER_SIZE_9
+  serial1->status_control_b |= (1<<USART1_UCSZ02);
+  #endif
+#+END_SRC
+
+***** UCSR C
+
+#+BEGIN_SRC c
+  serial1->status_control_c = 0;
+
+  #ifdef USART1_SYNC_MODE
+  serial1->status_control_c |= (1<<USART1_UMLSEL0);
+  #endif
+  #ifdef USART1_MASTER_SPI_MODE
+  serial1->status_control_c |= (1<<USART1_UMLSEL1) | (1<<USART1_UMLSEL0);
+  #endif
+
+  #ifdef USART1_PARITY_CHECK_ODD
+  serial1->status_control_c |= (1<<USART1_UPM1) | (1<<USART1_UPM0) ;
+  #endif
+  #ifdef USART1_PARITY_CHECK_EVEN
+  serial1->status_control_c |= (1<<USART1_UPM1);
+  #endif
+
+  #ifdef USART1_STOP_BIT_TWO
+  serial1->status_control_c |= (1<<USART1_USBS0);
+  #endif
+
+  #ifdef USART1_CHARACTER_SIZE_8
+  serial1->status_control_c |= (1<<USART1_UCSZ01) | (1<<USART1_UCSZ00);
+  #endif
+  #ifdef USART1_CHARACTER_SIZE_7
+  serial1->status_control_c |= (1<<USART1_UCSZ01);
+  #endif
+  #ifdef USART1_CHARACTER_SIZE_6
+  serial1->status_control_c |= (1<<USART1_UCSZ00);
+  #endif
+
+  #ifdef USART1_POLARITY_TX_FALLING
+  serial1->status_control_c |= (1<<USART1_UCPOL0);
+  #endif
+#+END_SRC
+
+**** USART 2
+Apply the configuration for this USARTn structure.
+
+***** UBBR
+
+#+BEGIN_SRC c
+serial2->baud_rate_h = (unsigned char) (USART2_BRR_VALUE>>8);
+serial2->baud_rate_l = (unsigned char) USART2_BRR_VALUE;
+#+END_SRC
+
+***** UCSR A
+Most of this bits are readonly. There is no need to set them because the initial values are right.
+
+***** UCSR B
+First, clear the register.
+
+#+BEGIN_SRC c
+  serial2->status_control_b = 0;
+#+END_SRC
+
+Set the interruptions enable according to the macros.
+
+#+BEGIN_SRC c
+  #ifdef USART2_RX_INT_ENABLE
+  serial2->status_control_b |= (1<<USART2_RCXIE0);
+  #endif
+  #ifdef USART2_TX_INT_ENABLE
+  serial2->status_control_b |= (1<<USART2_TCXIEN0);
+  #endif
+  #ifdef USART2_UDR_INT_ENABLE
+  serial2->status_control_b |= (1<<USART2_UDRIE0);
+  #endif
+#+END_SRC
+
+Set the receiving and transmitting enable.
+
+#+BEGIN_SRC c
+  #ifdef USART2_RX_ENABLE
+  serial2->status_control_b |= (1<<USART2_RXEN0);
+  #endif
+  #ifdef USART2_TX_ENABLE
+  serial2->status_control_b |= (1<<USART2_TXEN0);
+  #endif
+#+END_SRC
+
+Finally, if the macro ~USART2_CHARACTER_SIZE_9~ is setted, change the UCSZ02 bit.
+
+#+BEGIN_SRC c
+  #ifdef USART2_CHARACTER_SIZE_9
+  serial2->status_control_b |= (1<<USART2_UCSZ02);
+  #endif
+#+END_SRC
+
+***** UCSR C
+
+#+BEGIN_SRC c
+  serial2->status_control_c = 0;
+
+  #ifdef USART2_SYNC_MODE
+  serial2->status_control_c |= (1<<USART2_UMLSEL0);
+  #endif
+  #ifdef USART2_MASTER_SPI_MODE
+  serial2->status_control_c |= (1<<USART2_UMLSEL1) | (1<<USART2_UMLSEL0);
+  #endif
+
+  #ifdef USART2_PARITY_CHECK_ODD
+  serial2->status_control_c |= (1<<USART2_UPM1) | (1<<USART2_UPM0) ;
+  #endif
+  #ifdef USART2_PARITY_CHECK_EVEN
+  serial2->status_control_c |= (1<<USART2_UPM1);
+  #endif
+
+  #ifdef USART2_STOP_BIT_TWO
+  serial2->status_control_c |= (1<<USART2_USBS0);
+  #endif
+
+  #ifdef USART2_CHARACTER_SIZE_8
+  serial2->status_control_c |= (1<<USART2_UCSZ01) | (1<<USART2_UCSZ00);
+  #endif
+  #ifdef USART2_CHARACTER_SIZE_7
+  serial2->status_control_c |= (1<<USART2_UCSZ01);
+  #endif
+  #ifdef USART2_CHARACTER_SIZE_6
+  serial2->status_control_c |= (1<<USART2_UCSZ00);
+  #endif
+
+  #ifdef USART2_POLARITY_TX_FALLING
+  serial2->status_control_c |= (1<<USART2_UCPOL0);
+  #endif
+#+END_SRC
+
+**** USART 3
+Apply the configuration for this USARTn structure.
+
+***** UBBR
+
+#+BEGIN_SRC c
+serial3->baud_rate_h = (unsigned char) (USART3_BRR_VALUE>>8);
+serial3->baud_rate_l = (unsigned char) USART3_BRR_VALUE;
+#+END_SRC
+
+***** UCSR A
+Most of this bits are readonly. There is no need to set them because the initial values are right.
+
+***** UCSR B
+First, clear the register.
+
+#+BEGIN_SRC c
+  serial3->status_control_b = 0;
+#+END_SRC
+
+Set the interruptions enable according to the macros.
+
+#+BEGIN_SRC c
+  #ifdef USART3_RX_INT_ENABLE
+  serial3->status_control_b |= (1<<USART3_RCXIE0);
+  #endif
+  #ifdef USART3_TX_INT_ENABLE
+  serial3->status_control_b |= (1<<USART3_TCXIEN0);
+  #endif
+  #ifdef USART3_UDR_INT_ENABLE
+  serial3->status_control_b |= (1<<USART3_UDRIE0);
+  #endif
+#+END_SRC
+
+Set the receiving and transmitting enable.
+
+#+BEGIN_SRC c
+  #ifdef USART3_RX_ENABLE
+  serial3->status_control_b |= (1<<USART3_RXEN0);
+  #endif
+  #ifdef USART3_TX_ENABLE
+  serial3->status_control_b |= (1<<USART3_TXEN0);
+  #endif
+#+END_SRC
+
+Finally, if the macro ~USART3_CHARACTER_SIZE_9~ is setted, change the UCSZ02 bit.
+
+#+BEGIN_SRC c
+  #ifdef USART3_CHARACTER_SIZE_9
+  serial3->status_control_b |= (1<<USART3_UCSZ02);
+  #endif
+#+END_SRC
+
+***** UCSR C
+
+#+BEGIN_SRC c
+  serial3->status_control_c = 0;
+
+  #ifdef USART3_SYNC_MODE
+  serial3->status_control_c |= (1<<USART3_UMLSEL0);
+  #endif
+  #ifdef USART3_MASTER_SPI_MODE
+  serial3->status_control_c |= (1<<USART3_UMLSEL1) | (1<<USART3_UMLSEL0);
+  #endif
+
+  #ifdef USART3_PARITY_CHECK_ODD
+  serial3->status_control_c |= (1<<USART3_UPM1) | (1<<USART3_UPM0) ;
+  #endif
+  #ifdef USART3_PARITY_CHECK_EVEN
+  serial3->status_control_c |= (1<<USART3_UPM1);
+  #endif
+
+  #ifdef USART3_STOP_BIT_TWO
+  serial3->status_control_c |= (1<<USART3_USBS0);
+  #endif
+
+  #ifdef USART3_CHARACTER_SIZE_8
+  serial3->status_control_c |= (1<<USART3_UCSZ01) | (1<<USART3_UCSZ00);
+  #endif
+  #ifdef USART3_CHARACTER_SIZE_7
+  serial3->status_control_c |= (1<<USART3_UCSZ01);
+  #endif
+  #ifdef USART3_CHARACTER_SIZE_6
+  serial3->status_control_c |= (1<<USART3_UCSZ00);
+  #endif
+
+  #ifdef USART3_POLARITY_TX_FALLING
+  serial3->status_control_c |= (1<<USART3_UCPOL0);
+  #endif
+#+END_SRC
+
 **** End init
 
 #+BEGIN_SRC c
@@ -372,27 +1119,28 @@ The register will be setted as shown in the following.
 #+END_SRC
 
 
-*** Get Char
+*** Get Char Internal Method
+Receive a character using the provided serial pointer. This can be used by USART0, USART1 or the others.
 
 #+BEGIN_SRC c
-char serial_get_char(){
+char _serial_get_char(uint8_t *p_serial){
 #+END_SRC
 
 Wait until the value received is ready.
 
 #+BEGIN_SRC c
-while (! (serial->status_control_a & (1<<RXC0)));
+while (! (p_serial->status_control_a & (1<<RXC0)));
 #+END_SRC
 
 Get the character and return it.
 
 #+BEGIN_SRC c
-char c = serial->data;
+char c = p_serial->data;
 return c;
 #+END_SRC
 
 #+BEGIN_SRC c
-}
+} // _serial_get_char
 #+END_SRC
 
 *** Put Char
@@ -417,6 +1165,14 @@ Return.
 
 #+BEGIN_SRC c
 }
+#+END_SRC
+
+*** Get Char
+Call the internal function with the ~serial~ pointer.
+#+BEGIN_SRC c
+  char serial_get_char(){
+    return _serial_get_char(serial);
+  }
 #+END_SRC
 
 *** Send string
@@ -600,8 +1356,9 @@ Send a character, a string and a number.
 
 #+BEGIN_SRC c
       serial_put_char('R');
+      serial_put_char('\n');
       serial_put_char('\r');
-      serial_send_string("Hello world\n");
+      serial_send_string("Hello world\n\r");
       serial_send_integer(-12345);
 #+END_SRC
 

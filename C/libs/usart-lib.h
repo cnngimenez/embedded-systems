@@ -59,6 +59,36 @@
 #define USART_POLARITY_TX_RISING 1
 // #define USART_POLARITY_TX_FALLING 1
 
+/*
+ Uncomment this for enabling USART 1 registers.
+ Its mode is configure at the usart_1_config.h file.
+*/
+// #define USART_1
+
+#ifdef USART_1
+#include "usart_1_config.h"
+#endif
+
+/*
+ Uncomment this for enabling USART 2 registers.
+ Its mode is configure at the usart_2_config.h file.
+*/
+// #define USART_2
+
+#ifdef USART_2
+#include "usart_2_config.h"
+#endif
+
+/*
+ Uncomment this for enabling USART 3 registers.
+ Its mode is configure at the usart_3_config.h file.
+*/
+// #define USART_3
+
+#ifdef USART_3
+#include "usart_3_config.h"
+#endif
+
 void serial_init();
 
 char serial_get_char();
@@ -74,5 +104,53 @@ void serial_put_char(char c);
 void serial_send_string(char *s);
 
 void serial_send_integer(int number);
+
+#define GET_CHAR_FNC(N) char serial ##N## _get_char();
+#define GET_LINE_FNC(N) char* serial  ##N## _get_line();
+#define GET_STRING_FNC(N) char* serial ##N## _get_string();
+#define GET_INTEGER_FNC(N) int serial ##N## _get_integer();
+
+#define PUT_CHAR_FNC(N) void serial ##N## _put_char(char c);
+#define SEND_STRING_FNC(N) void serial ##N## _send_string(char *s);
+#define SEND_INTEGER_FNC(N) void serial ##N## _send_integer(int number);
+
+#ifdef USART_1
+
+GET_CHAR_FNC(1)
+GET_LINE_FNC(1)
+GET_STRING_FNC(1)
+GET_INTEGER_FNC(1)
+
+PUT_CHAR_FNC(1)
+SEND_STRING_FNC(1)
+SEND_INTEGER_FNC(1)
+
+#endif
+
+#ifdef USART_2
+
+GET_CHAR_FNC(2)
+GET_LINE_FNC(2)
+GET_STRING_FNC(2)
+GET_INTEGER_FNC(2)
+
+PUT_CHAR_FNC(2)
+SEND_STRING_FNC(2)
+SEND_INTEGER_FNC(2)
+
+#endif
+
+#ifdef USART_3
+
+GET_CHAR_FNC(3)
+GET_LINE_FNC(3)
+GET_STRING_FNC(3)
+GET_INTEGER_FNC(3)
+
+PUT_CHAR_FNC(3)
+SEND_STRING_FNC(3)
+SEND_INTEGER_FNC(3)
+
+#endif
 
 #endif // _USART_LIB_H

@@ -26,8 +26,9 @@ void main(){
 serial_init();
 
 serial_put_char('R');
+serial_put_char('\n');
 serial_put_char('\r');
-serial_send_string("Hello world\n");
+serial_send_string("Hello world\n\r");
 serial_send_integer(-12345);
 
 }

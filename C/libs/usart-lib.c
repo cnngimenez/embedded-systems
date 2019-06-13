@@ -35,12 +35,23 @@ typedef struct {
 
 volatile uart_t *serial = (uart_t*) (0xc0);
 
+#ifdef USART_1
+volatile uart_t *serial_1 = (uart_t*) (0xc8);
+#endif
+#ifdef USART_2
+volatile uart_t *serial_2 = (uart_t*) (0xd0);
+#endif
+#ifdef USART_3
+volatile uart_t *serial_3 = (uart_t*) (0x130);
+#endif
+
 void serial_init(){
 
 serial->baud_rate_h = (unsigned char) (BRR_VALUE>>8);
 serial->baud_rate_l = (unsigned char) BRR_VALUE;
 
 serial->status_control_b = 0;
+
 #ifdef USART_RX_INT_ENABLE
 serial->status_control_b |= (1<<RCXIE0);
 #endif
@@ -57,16 +68,15 @@ serial->status_control_b |= (1<<RXEN0);
 #ifdef USART_TX_ENABLE
 serial->status_control_b |= (1<<TXEN0);
 #endif
-
-#ifdef USART_CHARACTER_SIZE_9
-serial->status_control_b |= (1<<UCSZ02);
-#endif
-
 /*
 // (0<<RCXIE0) | (0<<TCXIE0) | (0<<UDRIE) |
 | (1<<RXEN0) | (1<<TXEN0);
 // (0<<UCSZ02) | (0<<RXB80) | (0<<TXB80);
 */
+
+#ifdef USART_CHARACTER_SIZE_9
+serial->status_control_b |= (1<<UCSZ02);
+#endif
 
 serial->status_control_c = 0;
 
@@ -106,6 +116,186 @@ serial->status_control_c |= (1<<UCPOL0);
 /*
 | (1<<UCSZ01) | (1<<UCSZ00);
 */
+
+serial1->baud_rate_h = (unsigned char) (USART1_BRR_VALUE>>8);
+serial1->baud_rate_l = (unsigned char) USART1_BRR_VALUE;
+
+serial1->status_control_b = 0;
+
+#ifdef USART1_RX_INT_ENABLE
+serial1->status_control_b |= (1<<USART1_RCXIE0);
+#endif
+#ifdef USART1_TX_INT_ENABLE
+serial1->status_control_b |= (1<<USART1_TCXIEN0);
+#endif
+#ifdef USART1_UDR_INT_ENABLE
+serial1->status_control_b |= (1<<USART1_UDRIE0);
+#endif
+
+#ifdef USART1_RX_ENABLE
+serial1->status_control_b |= (1<<USART1_RXEN0);
+#endif
+#ifdef USART1_TX_ENABLE
+serial1->status_control_b |= (1<<USART1_TXEN0);
+#endif
+
+#ifdef USART1_CHARACTER_SIZE_9
+serial1->status_control_b |= (1<<USART1_UCSZ02);
+#endif
+
+serial1->status_control_c = 0;
+
+#ifdef USART1_SYNC_MODE
+serial1->status_control_c |= (1<<USART1_UMLSEL0);
+#endif
+#ifdef USART1_MASTER_SPI_MODE
+serial1->status_control_c |= (1<<USART1_UMLSEL1) | (1<<USART1_UMLSEL0);
+#endif
+
+#ifdef USART1_PARITY_CHECK_ODD
+serial1->status_control_c |= (1<<USART1_UPM1) | (1<<USART1_UPM0) ;
+#endif
+#ifdef USART1_PARITY_CHECK_EVEN
+serial1->status_control_c |= (1<<USART1_UPM1);
+#endif
+
+#ifdef USART1_STOP_BIT_TWO
+serial1->status_control_c |= (1<<USART1_USBS0);
+#endif
+
+#ifdef USART1_CHARACTER_SIZE_8
+serial1->status_control_c |= (1<<USART1_UCSZ01) | (1<<USART1_UCSZ00);
+#endif
+#ifdef USART1_CHARACTER_SIZE_7
+serial1->status_control_c |= (1<<USART1_UCSZ01);
+#endif
+#ifdef USART1_CHARACTER_SIZE_6
+serial1->status_control_c |= (1<<USART1_UCSZ00);
+#endif
+
+#ifdef USART1_POLARITY_TX_FALLING
+serial1->status_control_c |= (1<<USART1_UCPOL0);
+#endif
+
+serial2->baud_rate_h = (unsigned char) (USART2_BRR_VALUE>>8);
+serial2->baud_rate_l = (unsigned char) USART2_BRR_VALUE;
+
+serial2->status_control_b = 0;
+
+#ifdef USART2_RX_INT_ENABLE
+serial2->status_control_b |= (1<<USART2_RCXIE0);
+#endif
+#ifdef USART2_TX_INT_ENABLE
+serial2->status_control_b |= (1<<USART2_TCXIEN0);
+#endif
+#ifdef USART2_UDR_INT_ENABLE
+serial2->status_control_b |= (1<<USART2_UDRIE0);
+#endif
+
+#ifdef USART2_RX_ENABLE
+serial2->status_control_b |= (1<<USART2_RXEN0);
+#endif
+#ifdef USART2_TX_ENABLE
+serial2->status_control_b |= (1<<USART2_TXEN0);
+#endif
+
+#ifdef USART2_CHARACTER_SIZE_9
+serial2->status_control_b |= (1<<USART2_UCSZ02);
+#endif
+
+serial2->status_control_c = 0;
+
+#ifdef USART2_SYNC_MODE
+serial2->status_control_c |= (1<<USART2_UMLSEL0);
+#endif
+#ifdef USART2_MASTER_SPI_MODE
+serial2->status_control_c |= (1<<USART2_UMLSEL1) | (1<<USART2_UMLSEL0);
+#endif
+
+#ifdef USART2_PARITY_CHECK_ODD
+serial2->status_control_c |= (1<<USART2_UPM1) | (1<<USART2_UPM0) ;
+#endif
+#ifdef USART2_PARITY_CHECK_EVEN
+serial2->status_control_c |= (1<<USART2_UPM1);
+#endif
+
+#ifdef USART2_STOP_BIT_TWO
+serial2->status_control_c |= (1<<USART2_USBS0);
+#endif
+
+#ifdef USART2_CHARACTER_SIZE_8
+serial2->status_control_c |= (1<<USART2_UCSZ01) | (1<<USART2_UCSZ00);
+#endif
+#ifdef USART2_CHARACTER_SIZE_7
+serial2->status_control_c |= (1<<USART2_UCSZ01);
+#endif
+#ifdef USART2_CHARACTER_SIZE_6
+serial2->status_control_c |= (1<<USART2_UCSZ00);
+#endif
+
+#ifdef USART2_POLARITY_TX_FALLING
+serial2->status_control_c |= (1<<USART2_UCPOL0);
+#endif
+
+serial3->baud_rate_h = (unsigned char) (USART3_BRR_VALUE>>8);
+serial3->baud_rate_l = (unsigned char) USART3_BRR_VALUE;
+
+serial3->status_control_b = 0;
+
+#ifdef USART3_RX_INT_ENABLE
+serial3->status_control_b |= (1<<USART3_RCXIE0);
+#endif
+#ifdef USART3_TX_INT_ENABLE
+serial3->status_control_b |= (1<<USART3_TCXIEN0);
+#endif
+#ifdef USART3_UDR_INT_ENABLE
+serial3->status_control_b |= (1<<USART3_UDRIE0);
+#endif
+
+#ifdef USART3_RX_ENABLE
+serial3->status_control_b |= (1<<USART3_RXEN0);
+#endif
+#ifdef USART3_TX_ENABLE
+serial3->status_control_b |= (1<<USART3_TXEN0);
+#endif
+
+#ifdef USART3_CHARACTER_SIZE_9
+serial3->status_control_b |= (1<<USART3_UCSZ02);
+#endif
+
+serial3->status_control_c = 0;
+
+#ifdef USART3_SYNC_MODE
+serial3->status_control_c |= (1<<USART3_UMLSEL0);
+#endif
+#ifdef USART3_MASTER_SPI_MODE
+serial3->status_control_c |= (1<<USART3_UMLSEL1) | (1<<USART3_UMLSEL0);
+#endif
+
+#ifdef USART3_PARITY_CHECK_ODD
+serial3->status_control_c |= (1<<USART3_UPM1) | (1<<USART3_UPM0) ;
+#endif
+#ifdef USART3_PARITY_CHECK_EVEN
+serial3->status_control_c |= (1<<USART3_UPM1);
+#endif
+
+#ifdef USART3_STOP_BIT_TWO
+serial3->status_control_c |= (1<<USART3_USBS0);
+#endif
+
+#ifdef USART3_CHARACTER_SIZE_8
+serial3->status_control_c |= (1<<USART3_UCSZ01) | (1<<USART3_UCSZ00);
+#endif
+#ifdef USART3_CHARACTER_SIZE_7
+serial3->status_control_c |= (1<<USART3_UCSZ01);
+#endif
+#ifdef USART3_CHARACTER_SIZE_6
+serial3->status_control_c |= (1<<USART3_UCSZ00);
+#endif
+
+#ifdef USART3_POLARITY_TX_FALLING
+serial3->status_control_c |= (1<<USART3_UCPOL0);
+#endif
 
 }
 
