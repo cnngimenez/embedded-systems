@@ -4,8 +4,9 @@ Examples made for the Arduino board.
 
 - Libraries
   - [[file:C/libs/usart-lib.org][UART Library]]
+  - [[file:C/libs/lcd.org][LCD library]]
 - [[file:C/echo/index.org][Serial Echo Example]] (UART example)
-
+- [[file:C/servo/index.org][Servo Motor Example]] (PWM example)
 
 * Assembler
 
