@@ -1,0 +1,1071 @@
+
+The following is a table that describes the connections needed and the port numbers used.
+
+|--------------+-------------+------------+-----------|
+| Display port | Display pin | Board Pin  | Port Name |
+|--------------+-------------+------------+-----------|
+| D7           |          14 | Digital 2  | PD2       |
+| D6           |          13 | Digital 3  | PD3       |
+| D5           |          12 | Digital 4  | PD4       |
+| D4           |          11 | Digital 5  | PD5       |
+|--------------+-------------+------------+-----------|
+| Enable       |           6 | Digital 11 | PB3       |
+| RW           |           5 | Digital 10 | PB2       |
+| RS           |           4 | Digital 12 | PB4       |
+|--------------+-------------+------------+-----------|
+
+About commands, see https://mil.ufl.edu/3744/docs/lcdmanual/commands.html
+* Bits Names and Configuration
+
+The following is a table with the bit names and the meaning of each of them.
+
+|----------+-----------------------------+---------------+-------------|
+| Bit Name | Description                 | 1             | 0           |
+|----------+-----------------------------+---------------+-------------|
+| DL       | Interface data is 8/4 bits  | 8-bit         | 4-bit       |
+| N        | Number of line is 2 / 1     | 2 line        | 0 lines     |
+| F        | Font size is 5 \times 11 / 5 \times 8 | 5x10 dots     | 5x7 dots    |
+| D        | Entire display on           | Display  On   | Display Off |
+| C        | Cursor on                   | Cursor on     | Cursor off  |
+| B        | Cursor position on          | Blink on      | Blink off   |
+| ID       | Cursor move direction       | Increment     | Decrement   |
+| S        | Display shift               | Shift         | No shift    |
+| SC       |                             | Shift display | Move cursor |
+| RL       |                             | Shift right   | Shift left  |
+|----------+-----------------------------+---------------+-------------|
+
+
+* Header file
+:PROPERTIES:
+:header-args: :comments no :padline yes :tangle lcd-lib.h
+:END:
+
+** License
+#+BEGIN_SRC c
+/* 
+   Copyright 2019 Christian Gimenez
+   
+   Author: Christian Gimenez   
+
+   lcd-lib.h
+   
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation, either version 3 of the License, or
+   (at your option) any later version.
+   
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+   
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+#+END_SRC
+
+
+** Start header
+Don't include the header more than once.
+
+#+BEGIN_SRC c
+#ifndef _LCD_LIB_H
+#define _LCD_LIB_H 1
+#+END_SRC
+
+Include integer subtypes definitions (like ~uint8_t~).
+
+#+BEGIN_SRC c
+#include <stdint.h>
+#+END_SRC
+
+** Configuration constants
+#+BEGIN_SRC c
+/**
+ Interface data is 8/4 bits.
+ */
+#define DL 0
+/** 
+  Number of line is 2/1.
+*/
+#define N 1
+/**
+ Font size is 5x11/5x8.
+ */
+#define F 1
+/**
+ D=1: Entire display on
+ */
+#define D 1
+/**
+ C=1: Cursor on
+ */
+#define C 1
+/**
+ B=1: cursor position on
+ */
+#define B 1
+
+/**
+ Cursor move direction
+ */
+#define ID 1
+/**
+ Display shift
+*/
+#define S 1
+#+END_SRC
+
+** Define methods
+
+*** Init
+Initialize lcd
+#+BEGIN_SRC c
+void lcd_init();
+#+END_SRC
+
+*** Clear
+Clear the DDRAM and the display. Set the character 20H (space) to all 80 bytes of DDRAM. Set DDRAM address to 00H (return home).
+
+#+BEGIN_SRC c
+void lcd_clear();
+#+END_SRC
+
+*** Return home
+Set the DDRAM address to 00H (starting). The contents are not changed.
+
+#+BEGIN_SRC c
+void lcd_return_home();
+#+END_SRC
+
+*** Use DDRAM Address
+Set the given DDRAM address as the current one. The address is a 7-bit number, thus it must be between 0 and 127 (although the DDRAM has 80 bytes).
+
+#+BEGIN_SRC c
+void lcd_ddram_addr(uint8_t addr);
+#+END_SRC
+
+*** Send command
+Send a binary raw command to the LCD. Read the datasheet first!
+
+#+BEGIN_SRC c
+void lcd_send_command(int rs, uint8_t bin);
+#+END_SRC
+
+*** Send a char
+
+#+BEGIN_SRC c
+void lcd_send_char(char c);
+#+END_SRC
+
+*** Send a string
+Send characters one by one. If ~delay~ is greater than zero, then each character is sended one by one with the given delay in milliseconds.
+
+#+BEGIN_SRC c
+void lcd_send_string(char *s, unsigned int delay);
+#+END_SRC
+
+*** Moving Display
+Move the entire display to the left or right. The cursor follows the display shift.
+
+Amount is the number of times the display moves. For each move, a number of milliseconds will be waited according to ~delay~ (and if this parameter is not zero).
+
+#+BEGIN_SRC c
+void lcd_display_left(unsigned int amount, unsigned int delay);
+void lcd_display_right(unsigned int amount, unsigned int delay);
+#+END_SRC
+
+*** Shift Cursor
+Move the cursor position to the left or right. Decrement or increment the DDRAM address counter accordingly. 
+
+#+BEGIN_SRC c
+void lcd_cursor_left(unsigned int amount, unsigned int delay);
+void lcd_cursor_right(unsigned int amount, unsigned int delay);
+#+END_SRC
+
+** End header
+
+#+BEGIN_SRC c
+#endif // _LCD_LIB_H
+#+END_SRC
+
+
+* Body file
+:PROPERTIES:
+:header-args: :comments no :padline yes :tangle lcd-lib.c
+:END:
+
+** License
+#+BEGIN_SRC c
+/* 
+   Copyright 2019 Christian Gimenez
+   
+   Author: Christian Gimenez   
+
+   lcd-lib.c
+   
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation, either version 3 of the License, or
+   (at your option) any later version.
+   
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+   
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+#+END_SRC
+
+** Include headers
+
+Include the lcd-lib header.
+
+#+BEGIN_SRC c
+#include "lcd-lib.h"
+#+END_SRC
+
+
+Include the IO AVR header. This makes available some constants with the same name as ATmega ports and registers.
+
+#+BEGIN_SRC c
+#include <avr/io.h>
+#+END_SRC
+
+** Pointers to used ports
+The B and D ports are needed. The following creates pointers for setting the port input or output configuration and data.
+
+First, for the B ports.
+
+#+BEGIN_SRC c
+volatile uint8_t *ddrb = (uint8_t*) (0x24);
+volatile uint8_t *portb = (uint8_t*) (0x25);
+#+END_SRC
+
+Now, for the D ports.
+
+#+BEGIN_SRC c
+volatile uint8_t *pind = (uint8_t*) (0x29);
+volatile uint8_t *ddrd = (uint8_t*) (0x2a);
+volatile uint8_t *portd = (uint8_t*) (0x2b);
+#+END_SRC
+
+** Wait functions
+
+According to the LCD datasheet, it indicates that the display requires some waiting for each command.
+
+Three different amount of minimum time is required: 40 milliseconds, 37 microseconds and 1.52 milliseconds.
+
+The Arduino UNO board has a 16MHz clock. Then, 16000000 cicles per seconds means that $\frac{1000000000 ns}{16000000Hz} = 62.5 ns/cicle$. Each assembler instruction requires 62.5ns approximately. 
+
+
+*** Wait 40 Milliseconds
+To wait 40 milliseconds (40000000 nanoseconds), the ATmega328p requires $\frac{40000000ns}{62.5 ns/cicle} = 640000 cicles$.
+
+The following function create at most 640000 operations.  
+
+#+BEGIN_SRC c
+void wait_40ms(){
+  for (unsigned long i = 1; i < 640000; i++);
+}
+#+END_SRC
+
+*** Wait 37 Microseconds
+To wait 37 \mu{}seconds (37000 nanoseconds), the ATmega328p requires $\frac{37000ns}{62.5 ns/cicle} = 592 cicles$.
+
+The following function ensure that at most 592 operations are executed.
+
+#+BEGIN_SRC c
+void wait_37us(){
+  for (int i = 1; i < 592; i++);
+}
+#+END_SRC
+
+*** Wait 1.52 Milliseconds
+Repeating the same operation as before: 1.52 milliseconds (1520000 nanoseconds), $\frac{1520000ns}{62.5 ns/cicle} = 24320 cicles$.
+
+Execute at most 24320 operations.
+
+#+BEGIN_SRC c
+void wait_1_52ms(){
+  for (unsigned long i = 1; i < 24320; i++);
+}
+#+END_SRC
+
+*** Wait milliseconds
+$\frac{1000000ns}{62.5ns/cicle} = 16000 cicles$ are needed for waiting 1 millisecond.
+
+#+BEGIN_SRC c
+void wait_ms(unsigned long i){
+#+END_SRC
+
+#+BEGIN_SRC c
+for (; i > 0; i--){
+#+END_SRC
+
+Considering three instruction for a ~for()~ sentence (add, assignation and comparison) then $16000/3 = 5333.33 cicles$. 
+
+#+BEGIN_SRC c
+for (unsigned int j = 0; j < 5333; j++);
+#+END_SRC
+
+#+BEGIN_SRC c
+  } // for
+} // wait_ms
+#+END_SRC
+
+*** Wait until BF
+The BF bit is used for detecting when the LCD display is busy or not. It cannot be used at the first steps of the initialization (first and second initialization step).
+
+#+BEGIN_SRC c
+void wait_bf(){
+#+END_SRC
+
+While the BF is marking as busy, repeat.
+
+#+BEGIN_SRC c
+uint8_t busy = 1;
+while (busy == 1){
+#+END_SRC
+
+Using the RW (PB2) bit setted for reading (on), ask for the BF bit. RS (PB4) must be off.
+
+#+BEGIN_SRC c
+*portb &= 0b11100011; // Erase PB2, PB3 and PB4
+*portb |= (1<<PB2); // Set PB2
+#+END_SRC
+
+Set the PD2-PD5 (D7 to D4 in display pins) for input.
+#+BEGIN_SRC c
+*portd &= 0b11000011;
+#+END_SRC
+
+Send the enable (E bit is PB3 port) directly.
+
+#+BEGIN_SRC c
+*portb |= (1<<PB3);
+wait_37us();
+*portb &= 0b11110111;
+#+END_SRC
+
+Read the BF (DB7 display port or PD2 board pin value).
+
+#+BEGIN_SRC c
+  busy = (*pind & 0b00000100) != 0;
+#+END_SRC
+
+End while.
+#+BEGIN_SRC c
+}
+#+END_SRC
+
+
+Restore PD2-PD5 ports to output mode.
+#+BEGIN_SRC c
+*portd |= 0b00111100;
+#+END_SRC
+
+Restore the RS, E and RW to zero value.
+#+BEGIN_SRC c
+*portb &= 0b11100011; // Erase PB2, PB3 and PB4
+#+END_SRC
+
+
+End function.
+
+#+BEGIN_SRC c
+} // wait_bf
+#+END_SRC
+
+** Sending the Enable Signal
+The following command tells the display that the data is ready to read. Each time the MPU send a command to the display, it must set the data at the D7-D4 (when using 4bit mode), RS and RW display's pins and then set the E pin on. When the display detects the falling edge of the E bit, the data is red and the command is executed.
+
+For this reason, the PB3 bit (connected to the E pin at the display) must be turned on, wait for a little time, and the turned off. This creates the falling edge needed. 
+
+#+BEGIN_SRC c
+void send_enable(){
+  // Enable when falling edge
+  *portb |= (1<<PB3);
+  wait_37us();
+  *portb &= 0b11110111;
+  wait_37us();
+}
+#+END_SRC
+
+** The initialization
+The initialization process for a 4bit interface consist on the following steps. The bits are the following: RS, RW and DB7, DB6, DB5, DB5.
+
+When two set of 6 bits appears, it means that the first is sended, the enable bit turned on and off, then the second set is sended turning on and off the enable bit at the end.
+
+Also, consider the bits names used at the header.
+
+1. Power on and wait 40ms (Vcc pin must have more that 4.5V).
+2. Send the first function set command: 00 0011. Wait 37 \mu{}seconds.
+3. Send the second function set command: 00 0010 and 00 NFXX. Wait 37 \mu{}seconds.
+4. Send the same second function set command again. Wait 37 \mu{}seconds.
+5. Send the display on/off command: 00 0000 and 00 1DCB. Wait 37 \mu{}seconds.
+6. Send the display clear command: 00 0000 and 00 0001. Wait 1.52 milliseconds.
+7. Send the entry mode set command: 00 0000 and 00 01(ID)S.
+
+The display can be in three possible states:
+
+- It is in the 8bit mode waiting for new commands.
+- It is in the 4bit mode waiting for new commands (waiting for the first 4bits).
+- It is in the 4bit mode, in the middle of the 4 second bits.
+
+Whenever it is in each of these states, to reset the display it must receive the first three function set commands: 
+
+
+*** First Function Set Command
+This set the display at the 8bit interface mode.
+
+|-----+-----+-----+-----+-----+-----+-----+-----|
+| PD7 | PD6 | PD5 | PD4 | PD3 | PD2 | PD1 | PD0 |
+|     |     | DB4 | DB5 | DB6 | DB7 |     |     |
+|-----+-----+-----+-----+-----+-----+-----+-----|
+|   0 |   0 | 1   | 1   | 0   | 0   |   0 |   0 |
+|-----+-----+-----+-----+-----+-----+-----+-----|
+
+#+BEGIN_SRC c
+void send_function_set1(){
+  *portd = 0b00110000;
+  // (0<<PD2) | (0<<PD3) | (1<<PD4) | (1<<PD5);
+  send_enable();
+}
+#+END_SRC
+
+*** Second Function Set Command
+The second function set commands the display to:
+
+- use one or two lines (N bit) and
+- the font size (F bit).
+
+#+BEGIN_SRC c
+void send_function_set2(){
+#+END_SRC
+
+The following send two sets of 4 bits. The first set is:
+
+|-----+-----+-----+-----+-----+-----+-----+-----|
+| PD7 | PD6 | PD5 | PD4 | PD3 | PD2 | PD1 | PD0 |
+|     |     | DB4 | DB5 | DB6 | DB7 |     |     |
+|-----+-----+-----+-----+-----+-----+-----+-----|
+|   0 |   0 | 0   | 1   | 0   | 0   |   0 |   0 |
+|-----+-----+-----+-----+-----+-----+-----+-----|
+
+#+BEGIN_SRC c
+  *portd = 0b00010000;
+    // (0<<PD2) | (0<<PD3) | (1<<PD4) | (0<<PD5);
+  send_enable();
+#+END_SRC
+
+
+The second set defines the F and N bits.
+
+|-----+-----+-----+-----+-----+-----+-----+-----|
+| PD7 | PD6 | PD5 | PD4 | PD3 | PD2 | PD1 | PD0 |
+|     |     | DB4 | DB5 | DB6 | DB7 |     |     |
+|-----+-----+-----+-----+-----+-----+-----+-----|
+|   0 |   0 | 0   | 0   | F   | N   |   0 |   0 |
+|-----+-----+-----+-----+-----+-----+-----+-----|
+
+#+BEGIN_SRC c
+  *portd = 0b00000000 | (N<<PD2) | (F<<PD3);
+    // (N<<PD2) | (F<<PD3) | (0<<PD4) | (0<<PD5);
+  send_enable();  
+}
+#+END_SRC
+
+*** Third Function Set Command
+Is the same as the last. This is an alias to the last function.
+
+#+BEGIN_SRC c
+  void send_function_set3(){
+    send_function_set2();
+  }
+#+END_SRC
+
+*** Display On or Off Function
+This function determines three configurations:
+
+- If the entire display is on (D bit)
+- If the cursor is on (C bit)
+- If the cursor position is on (B bit)
+
+For this, the command 0b0000_1DCB must be sended
+
+#+BEGIN_SRC c
+void send_display_onoff(){
+#+END_SRC
+
+This sends the first 4 bits.
+
+|-----+-----+-----+-----+-----+-----+-----+-----|
+| PD7 | PD6 | PD5 | PD4 | PD3 | PD2 | PD1 | PD0 |
+|     |     | DB4 | DB5 | DB6 | DB7 |     |     |
+|-----+-----+-----+-----+-----+-----+-----+-----|
+|   0 |   0 | 0   | 0   | 0   | 0   |   0 |   0 |
+|-----+-----+-----+-----+-----+-----+-----+-----|
+
+#+BEGIN_SRC c
+  *portd = 0b00000000;
+  // (0<<PD2) | (0<<PD3) | (0<<PD4) | (0<<PD5);
+  send_enable();
+#+END_SRC
+
+Then, send the following 4 bits.
+
+#+BEGIN_SRC c
+  *portd = 0b00000100 | (D<<PD3) | (C<<PD4) | (B<<PD5);
+    // (1<<PD2) | (D<<PD3) | (C<<PD4) | (B<<PD5);
+  send_enable();
+}
+#+END_SRC
+
+*** Display Clear Command 
+The clear display command is the following: 0b0000_0001.
+
+#+BEGIN_SRC c
+void send_display_clear(){
+#+END_SRC
+
+
+The first 4 bits are zeroed.
+
+#+BEGIN_SRC c
+  *portd = 0b00000000;
+    // (0<<PD2) | (0<<PD3) | (0<<PD4) | (0<<PD5);
+  send_enable();
+#+END_SRC
+
+The second set are the following.
+
+|-----+-----+-----+-----+-----+-----+-----+-----|
+| PD7 | PD6 | PD5 | PD4 | PD3 | PD2 | PD1 | PD0 |
+|     |     | DB4 | DB5 | DB6 | DB7 |     |     |
+|-----+-----+-----+-----+-----+-----+-----+-----|
+|   0 |   0 | 1   | 0   | 0   | 0   |   0 |   0 |
+|-----+-----+-----+-----+-----+-----+-----+-----|
+
+#+BEGIN_SRC c
+  *portd = 0b00100000;
+  // (0<<PD2) | (0<<PD3) | (0<<PD4) | (1<<PD5);
+  send_enable();
+}
+#+END_SRC
+
+*** Entry Mode Set Command
+The entry mode set command determines:
+
+- the cursor direction (ID bit) and
+- the display shift (S bit).
+
+The command is 0b0000_01(ID)S.
+
+#+BEGIN_SRC c
+void send_entry_modeset(){
+#+END_SRC
+
+Send the first four bits.
+
+#+BEGIN_SRC c
+  *portd = 0b00000000;
+  // (0<<PD2) | (0<<PD3) | (0<<PD4) | (0<<PD5);
+  send_enable();
+#+END_SRC
+
+Send the second set of bits.
+
+|-----+-----+-----+-----+-----+-----+-----+-----|
+| PD7 | PD6 | PD5 | PD4 | PD3 | PD2 | PD1 | PD0 |
+|     |     | DB4 | DB5 | DB6 | DB7 |     |     |
+|-----+-----+-----+-----+-----+-----+-----+-----|
+|   0 |   0 | ID  | S   | 1   | 0   |   0 |   0 |
+|-----+-----+-----+-----+-----+-----+-----+-----|
+
+
+#+BEGIN_SRC c
+  *portd = 0b00001000 | (ID<<PD4) | (S<<PD5);
+    // (0<<PD2) | (1<<PD3) | (ID<<PD4) | (S<<PD5);
+  send_enable();
+}
+#+END_SRC
+
+*** Init function
+This functions send all the function set commands in the order described before. 
+
+#+BEGIN_SRC c
+void lcd_init(){
+#+END_SRC
+
+Before sending the commands, set the arduino D ports mode as output and zero them.
+
+#+BEGIN_SRC c
+  *ddrd |= (1<<DDD5) | (1<<DDD4) | (1<<DDD3) | (1<<DDD2);
+  *portd = 0b00000000;
+#+END_SRC
+
+Same for B ports. But only for DDB2, DDB3 and DDB4 ports.
+
+#+BEGIN_SRC c
+  *ddrb |= (1<<DDB2) | (1<<DDB3) | (1<<DDB4);
+  *portb = 0b00000000;
+#+END_SRC
+
+Follow the initialization process. First, wait 40 milliseconds.
+
+#+BEGIN_SRC c
+  wait_40ms();
+#+END_SRC
+
+Second, send the first function set and wait.
+
+#+BEGIN_SRC c
+  send_function_set1();
+  wait_37us();
+#+END_SRC
+
+Third, send the second and third function set.
+
+#+BEGIN_SRC c
+  send_function_set2();
+  wait_37us();
+
+  send_function_set3();
+  wait_37us();
+#+END_SRC
+
+Send the display on/off function set.
+
+#+BEGIN_SRC c
+  send_display_onoff();
+  wait_37us();
+#+END_SRC
+
+Then, clear the display and wait longer.
+
+#+BEGIN_SRC c
+  send_display_clear();
+  wait_1_52ms();
+#+END_SRC
+
+Finally, send the entry mode set.
+
+#+BEGIN_SRC c
+  send_entry_modeset();
+#+END_SRC
+
+End the init process.
+
+#+BEGIN_SRC c
+}
+#+END_SRC
+
+** A simple function for reversing bits
+This reverse bits.
+
+0b0100 \to 0b0010
+
+#+BEGIN_SRC c
+unsigned char reverse(unsigned char b) {
+   b = (b & 0xF0) >> 4 | (b & 0x0F) << 4;
+   b = (b & 0xCC) >> 2 | (b & 0x33) << 2;
+   b = (b & 0xAA) >> 1 | (b & 0x55) << 1;
+   return b;
+}
+#+END_SRC
+
+** Send character
+#+BEGIN_SRC c
+void lcd_send_char(char c){
+#+END_SRC
+
+The table of the characters in the datasheet indicates that the number of the characters are the same as the ASCII code. Thus, no need for any conversion.
+
+Before anything, wait until LCD is not busy.
+
+#+BEGIN_SRC c
+wait_bf();
+#+END_SRC
+
+Set the RS to 1 for setting the RAM.
+
+#+BEGIN_SRC c
+*portb |= (1<<PB4);
+#+END_SRC
+
+Reverse the char for suiting to the DB7-0 numbers.
+#+BEGIN_SRC c
+uint8_t cr = reverse(c);
+#+END_SRC
+
+
+Send the first four bits of data. The D ports has to have the following values.
+
+|-----+-----+------+------+------+------+-----+-----|
+| PD7 | PD6 | PD5  | PD4  | PD3  | PD2  | PD1 | PD0 |
+|     |     | DB4  | DB5  | DB6  | DB7  |     |     |
+|-----+-----+------+------+------+------+-----+-----|
+|   0 |   0 | c(4) | c(5) | c(6) | c(7) |   0 |   0 |
+|-----+-----+------+------+------+------+-----+-----|
+
+#+BEGIN_SRC c
+*portd = 0b00111100 & (cr << 2);
+send_enable();
+#+END_SRC
+
+Send the last four bits of data.
+
+|-----+-----+------+------+------+------+-----+-----|
+| PD7 | PD6 | PD5  | PD4  | PD3  | PD2  | PD1 | PD0 |
+|     |     | DB0  | DB1  | DB2  | DB3  |     |     |
+|-----+-----+------+------+------+------+-----+-----|
+|   0 |   0 | c(0) | c(1) | c(2) | c(3) |   0 |   0 |
+|-----+-----+------+------+------+------+-----+-----|
+
+
+#+BEGIN_SRC c
+*portd = 0b00111100 & (cr >> 2);
+send_enable();
+#+END_SRC
+
+Restore RS at zero, just in case.
+
+#+BEGIN_SRC c
+*portb &= 0b11101111;
+#+END_SRC
+
+Wait until LCD is not busy.
+
+#+BEGIN_SRC c
+wait_bf();
+#+END_SRC
+
+#+BEGIN_SRC c
+}
+#+END_SRC
+
+** Send Raw Command
+#+BEGIN_SRC c
+void lcd_send_command(int rs, uint8_t bin){
+#+END_SRC
+
+Before sending the data, set the RS bit.
+
+#+BEGIN_SRC c
+  if (rs == 1) {
+    ,*portb |= (1<<PB4);
+   }else{
+    ,*portb &= 0b11101111;
+   }
+#+END_SRC
+
+Reverse the bits of bin:
+
+#+BEGIN_SRC c
+uint8_t binr = reverse(bin);
+#+END_SRC
+
+Send the first four bits of data. The D ports has to have the following values.
+
+|-----+-----+--------+--------+--------+--------+-----+-----|
+| PD7 | PD6 | PD5    | PD4    | PD3    | PD2    | PD1 | PD0 |
+|     |     | DB4    | DB5    | DB6    | DB7    |     |     |
+|-----+-----+--------+--------+--------+--------+-----+-----|
+|   0 |   0 | bin(4) | bin(5) | bin(6) | bin(7) |   0 |   0 |
+|-----+-----+--------+--------+--------+--------+-----+-----|
+
+#+BEGIN_SRC c
+*portd = 0b00111100 & (binr<<2);
+send_enable();
+#+END_SRC
+
+Send the last four bits of data.
+
+|-----+-----+--------+--------+--------+--------+-----+-----|
+| PD7 | PD6 | PD5    | PD4    | PD3    | PD2    | PD1 | PD0 |
+|     |     | DB4    | DB5    | DB6    | DB7    |     |     |
+|-----+-----+--------+--------+--------+--------+-----+-----|
+|   0 |   0 | bin(0) | bin(1) | bin(2) | bin(3) |   0 |   0 |
+|-----+-----+--------+--------+--------+--------+-----+-----|
+
+
+#+BEGIN_SRC c
+*portd = 0b00111100 & (binr>>2);
+send_enable();
+#+END_SRC
+
+Reset the port b.
+
+#+BEGIN_SRC c
+*portb &= 0b11101111;
+#+END_SRC
+
+
+Wait until LCD is not busy.
+
+#+BEGIN_SRC c
+wait_bf();
+#+END_SRC
+
+#+BEGIN_SRC c
+}
+#+END_SRC
+
+** Clear display function
+#+BEGIN_SRC c
+  void lcd_clear(){
+    lcd_send_command(0, 0b00000001);
+    wait_bf();
+  }
+#+END_SRC
+
+** Return home function
+#+BEGIN_SRC c
+  void lcd_return_home(){
+    lcd_send_command(0, 0b00000010);
+    wait_bf();
+  }
+#+END_SRC
+
+** Set DDRAM Address
+#+BEGIN_SRC c
+  void lcd_ddram_addr(uint8_t addr){
+    lcd_send_command(0, 0b10000000 | addr);
+    wait_bf();
+  }
+#+END_SRC
+
+
+** Send string
+
+#+BEGIN_SRC c
+void lcd_send_string(char *s, unsigned int delay){
+#+END_SRC
+
+For each character, until the ~\0~ character, send them one by one.
+
+#+BEGIN_SRC c
+  unsigned int i = 0;
+  while (s[i] != '\0'){
+    lcd_send_char(s[i]);
+    if (delay > 0){
+      wait_ms(delay);
+    }
+    i++;
+   }
+#+END_SRC
+
+#+BEGIN_SRC c
+} // lcd_send_string
+#+END_SRC
+
+** Move display or cursor
+The following functions send the Cursor or Display Shift instruction. It has the following format.
+
+|----+----+-----+-----+-----+-----+-----+-----+-----+-----|
+| RS | RW | DB7 | DB6 | DB5 | DB4 | DB3 | DB2 | DB1 | DB0 |
+|----+----+-----+-----+-----+-----+-----+-----+-----+-----|
+|  0 |  0 |   0 |   0 |   0 |   0 | SC  | RL  | x   | x   |
+|----+----+-----+-----+-----+-----+-----+-----+-----+-----|
+
+According to https://mil.ufl.edu/3744/docs/lcdmanual/commands.html, the following table applies.
+
+|----+----+----------------------------------------|
+| SC | RL | Description                            |
+|----+----+----------------------------------------|
+|  0 |  0 | Shift the cursor to the left           |
+|  0 |  1 | Shift the cursor to the right          |
+|  1 |  0 | Shifts the entire display to the left  |
+|  1 |  1 | Shifts the entire display to the right |
+|----+----+----------------------------------------|
+
+When SC is zero, the DDRAM address counter decrement (left) or increment (right) accordingly.
+
+*** Move Display
+#+BEGIN_SRC c
+  void lcd_display_left(unsigned int amount, unsigned int delay){
+    for (;amount > 0; amount --){
+      lcd_send_command(0, 0b00011000);
+      if (delay > 0){
+        wait_ms(delay);
+      }
+    }
+  }
+#+END_SRC
+
+#+BEGIN_SRC c
+  void lcd_display_right(unsigned int amount, unsigned int delay){
+    for (;amount > 0; amount --){
+      lcd_send_command(0, 0b00011100);
+      if (delay > 0){
+        wait_ms(delay);
+      }
+    }
+  }
+#+END_SRC
+
+*** Move Cursor
+
+#+BEGIN_SRC c
+void lcd_cursor_left(unsigned int amount, unsigned int delay){
+   for (;amount > 0; amount --){
+      lcd_send_command(0, 0b00010000);
+      if (delay > 0){
+        wait_ms(delay);
+      }
+    } 
+}
+void lcd_cursor_right(unsigned int amount, unsigned int delay){
+   for (;amount > 0; amount --){
+      lcd_send_command(0, 0b00010100);
+      if (delay > 0){
+        wait_ms(delay);
+      }
+    } 
+}
+#+END_SRC
+
+* Test file
+:PROPERTIES:
+:header-args: :comments no :padline yes :tangle tests/lcd-send.c
+:END:
+
+Include the LCD library.
+
+#+BEGIN_SRC c
+#include "../lcd-lib.h"
+#+END_SRC
+
+A simple function for wating a little.
+
+#+BEGIN_SRC c
+void wait(){
+  for (long i = 1; i < 100000; i++);
+}
+#+END_SRC
+
+Start main function.
+
+#+BEGIN_SRC c
+void main(){
+#+END_SRC
+
+Initialize the LCD.
+
+#+BEGIN_SRC c
+lcd_init();
+#+END_SRC
+
+Repeat forever.
+
+#+BEGIN_SRC c
+while (1) {
+#+END_SRC
+
+- Clear the LCD.
+- Set the 2 columns and a nice font.
+- Increment the cursor and don't shift the screen while adding characters.
+- Display cursor without blinking. 
+
+#+BEGIN_SRC c
+   lcd_clear();
+   lcd_send_command(0, 0b00101100); // function set
+   lcd_send_command(0, 0b00010100); // cursor display
+   lcd_send_command(0, 0b00000110); // Entry mode set
+   lcd_send_command(0, 0b00001110); // display on/off
+#+END_SRC
+
+Start at the DDRAM zero.
+
+#+BEGIN_SRC c
+   lcd_ddram_addr(0);
+#+END_SRC
+
+Send hello.
+
+#+BEGIN_SRC c
+   lcd_send_char('h');
+   wait();
+   lcd_send_char('e');
+   wait();
+   lcd_send_char('l');
+   wait();
+   lcd_send_char('l');
+   wait();
+   lcd_send_char('o');
+   wait();
+#+END_SRC
+
+Start at the 40 DDRAM address.
+
+#+BEGIN_SRC c
+   lcd_ddram_addr(40);
+#+END_SRC
+
+Send world.
+
+#+BEGIN_SRC c
+  lcd_send_string("world", 40);
+  wait();
+  wait();
+#+END_SRC
+
+
+
+
+#+BEGIN_SRC c
+} 
+#+END_SRC
+
+
+
+End main function.
+
+#+BEGIN_SRC c
+} //main
+#+END_SRC
+
+
+
+
+* Meta     :noexport:
+
+  # ----------------------------------------------------------------------
+  #+TITLE:  Library for controlling a simple LCD screen
+  #+AUTHOR: Christian Gimenez
+  #+DATE:   22 jun 2019
+  #+EMAIL:
+  #+DESCRIPTION: 
+  #+KEYWORDS: 
+
+  #+STARTUP: inlineimages hidestars content hideblocks entitiespretty indent fninline latexpreview
+  #+TODO: TODO(t!) CURRENT(c!) PAUSED(p!) | DONE(d!) CANCELED(C!@)
+  #+OPTIONS:   H:3 num:t toc:t \n:nil @:t ::t |:t ^:{} -:t f:t *:t <:t
+  #+OPTIONS:   TeX:t LaTeX:t skip:nil d:nil todo:t pri:nil tags:not-in-toc tex:imagemagick
+  #+LINK_UP:   
+  #+LINK_HOME: 
+  #+XSLT:
+
+  # -- HTML Export
+  #+INFOJS_OPT: view:info toc:t ftoc:t ltoc:t mouse:underline buttons:t path:libs/org-info.js
+  #+EXPORT_SELECT_TAGS: export
+  #+EXPORT_EXCLUDE_TAGS: noexport
+  #+HTML_LINK_UP: ../../index.html
+  #+HTML_LINK_HOME: ../../index.html
+
+  # -- For ox-twbs or HTML Export
+  #+HTML_HEAD: <link href="libs/bootstrap.min.css" rel="stylesheet">
+  #+HTML_HEAD: <script src="libs/jquery.min.js"></script> 
+  #+HTML_HEAD: <script src="libs/bootstrap.min.js"></script>
+  #+LANGUAGE: en
+
+  # Local Variables:
+  # org-hide-emphasis-markers: t
+  # org-use-sub-superscripts: "{}"
+  # fill-column: 80
+  # visual-line-fringe-indicators: t
+  # ispell-local-dictionary: "british"
+  # End:
