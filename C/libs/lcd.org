@@ -1,13 +1,17 @@
 
+* Introduction
+This library support LCD screen with the ST7066 LCD Controller LSI unit and the HD44780 instruction set.
+
+** Connection used 
 The following is a table that describes the connections needed and the port numbers used.
 
 |--------------+-------------+------------+-----------|
 | Display port | Display pin | Board Pin  | Port Name |
 |--------------+-------------+------------+-----------|
-| D7           |          14 | Digital 2  | PD2       |
-| D6           |          13 | Digital 3  | PD3       |
-| D5           |          12 | Digital 4  | PD4       |
-| D4           |          11 | Digital 5  | PD5       |
+| DB7-DB3      |          14 | Digital 2  | PD2       |
+| DB6-DB2      |          13 | Digital 3  | PD3       |
+| DB5-DB1      |          12 | Digital 4  | PD4       |
+| DB4-DB0      |          11 | Digital 5  | PD5       |
 |--------------+-------------+------------+-----------|
 | Enable       |           6 | Digital 11 | PB3       |
 | RW           |           5 | Digital 10 | PB2       |
@@ -15,8 +19,10 @@ The following is a table that describes the connections needed and the port numb
 |--------------+-------------+------------+-----------|
 
 About commands, see https://mil.ufl.edu/3744/docs/lcdmanual/commands.html
-* Bits Names and Configuration
 
+If the ports are changed, refer to section [[*Send 4bits][Send 4bits]], [[*Set RS bit][Set RS bit]], [[*Set RW bit][Set RW bit]] and [[*Pointers to used ports][Pointers to used ports]].
+
+** Bits Names and Configuration
 The following is a table with the bit names and the meaning of each of them.
 
 |----------+-----------------------------+---------------+-------------|
@@ -117,7 +123,6 @@ Include integer subtypes definitions (like ~uint8_t~).
 #+END_SRC
 
 ** Define methods
-
 *** Init
 Initialize lcd
 #+BEGIN_SRC c
@@ -234,6 +239,14 @@ Include the IO AVR header. This makes available some constants with the same nam
 #include <avr/io.h>
 #+END_SRC
 
+** Macros
+The following define some constants as macros for ~set_data_bits~.
+
+#+BEGIN_SRC c
+#define DUPPER 1
+#define DLOWER 0
+#+END_SRC
+
 ** Pointers to used ports
 The B and D ports are needed. The following creates pointers for setting the port input or output configuration and data.
 
@@ -252,7 +265,168 @@ volatile uint8_t *ddrd = (uint8_t*) (0x2a);
 volatile uint8_t *portd = (uint8_t*) (0x2b);
 #+END_SRC
 
-** Wait functions
+** Auxiliary functions
+*** A simple function for reversing bits
+This reverse bits.
+
+0b0100 \to 0b0010
+
+#+BEGIN_SRC c
+unsigned char reverse(unsigned char b) {
+   b = (b & 0xF0) >> 4 | (b & 0x0F) << 4;
+   b = (b & 0xCC) >> 2 | (b & 0x33) << 2;
+   b = (b & 0xAA) >> 1 | (b & 0x55) << 1;
+   return b;
+}
+#+END_SRC
+
+*** Set E bit
+#+BEGIN_SRC c
+void e_on(){
+  *portb |= (1<<PB3);
+} // e_on
+
+void e_off(){
+  *portb &= 0b11110111;
+} // e_off
+#+END_SRC
+
+*** Set RS bit
+This function turns on the port that connects to the RS display input. It uses the port according to the section [[*Connection used][Connection used]].
+
+#+BEGIN_SRC c
+  void rs_on(){
+    ,*portb |= (1<<PB4);
+  } // rs_on
+#+END_SRC
+
+This one turns off the port.
+
+#+BEGIN_SRC c
+  void rs_off(){
+    ,*portb &= 0b11101111;
+  } // rs_off
+#+END_SRC
+
+*** Set RW bit
+According to the port assignment defined at section [[*Connection used][Connection used]], this function turns on the port.
+
+#+BEGIN_SRC c
+  void rw_on(){
+    *portb |= (1<<PB2); // Set PB2
+  } // rw_on
+#+END_SRC
+
+And this turns off the port.
+
+#+BEGIN_SRC c
+void rw_off(){
+  *portb &= 0b11111011; // Erase PB2 bit
+}
+#+END_SRC
+
+*** Set RW RS and E mode
+Set the ports modes corresponding to RW, RS and E display bits to output.
+#+BEGIN_SRC c
+void set_ersrw_mode(){
+  *ddrb |= (1<<DDB2) | (1<<DDB3) | (1<<DDB4);
+}
+#+END_SRC
+
+*** Set 4 bits of data
+This function send 4 bits of data. See [[*Connection used][Connection used]] section. If ~use_left~ is 1 then use the 4 left bits. 
+
+#+BEGIN_SRC c
+void set_data_bits(uint8_t bits, uint8_t use_left){
+#+END_SRC
+
+First, reverse the bits. After this instruction, the left 4 bits is at the right.
+
+| /        | < |   |   | > | < |   |   | > |
+|----------+---+---+---+---+---+---+---+---|
+| bits     | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
+|----------+---+---+---+---+---+---+---+---|
+| reversed | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
+|----------+---+---+---+---+---+---+---+---|
+
+#+BEGIN_SRC c
+uint8_t binr = reverse(bits);
+#+END_SRC
+
+Set the port D bits. D7-4 is assingned from PD2-5 so a displacement must be done according to which four bits is going to be used..
+
+| /            | <   |     |     |     |     |     |     | >   |
+|--------------+-----+-----+-----+-----+-----+-----+-----+-----|
+| Ports        | PD7 | PD6 | PD5 | PD4 | PD3 | PD2 | PD1 | PD0 |
+| Display pins |     |     | DB4 | DB5 | DB6 | DB7 |     |     |
+|--------------+-----+-----+-----+-----+-----+-----+-----+-----|
+| Values       | 0   |   0 | 1   | 1   | 0   | 0   |   0 | 0   |
+|--------------+-----+-----+-----+-----+-----+-----+-----+-----|
+
+#+BEGIN_SRC c
+  if (use_left == 1){
+    ,*portd = 0b00111100 & (binr<<2);
+   }else{
+    ,*portd = 0b00111100 & (binr>>2);
+   }
+#+END_SRC
+
+#+BEGIN_SRC c
+} // send_data_bits
+#+END_SRC
+
+*** Get 4 bits of data
+Get the data from the pins and return it at the first 4 bits.
+
+The input is as follows.
+
+| /            | < |   |     | >   | <   |     |   | > |
+|--------------+---+---+-----+-----+-----+-----+---+---|
+| Position     | 7 | 6 | 5   | 4   | 3   | 2   | 1 | 0 |
+|--------------+---+---+-----+-----+-----+-----+---+---|
+| Display pins |   |   | DB4 | DB5 | DB6 | DB7 |   |   |
+|              |   |   | DB0 | DB1 | DB2 | DB3 |   |   |
+|--------------+---+---+-----+-----+-----+-----+---+---|
+
+The function returns the value according to this order.
+
+| /            | < |   |   | > | <   |     |     | >   |
+|--------------+---+---+---+---+-----+-----+-----+-----|
+| Position     | 7 | 6 | 5 | 4 | 3   | 2   | 1   | 0   |
+|--------------+---+---+---+---+-----+-----+-----+-----|
+| Display pins |   |   |   |   | DB7 | DB6 | DB5 | DB4 |
+|              |   |   |   |   | DB3 | DB2 | DB1 | DB0 |
+|--------------+---+---+---+---+-----+-----+-----+-----|
+
+#+BEGIN_SRC c
+uint8_t get_data_bits(){
+  uint8_t data = *pind;
+  return (reverse(data) & 00111100) >> 2;
+} // get_data_bits
+#+END_SRC
+
+*** Set 4 bits modes
+Set the port mode for the pin as input (0) or output (1). The first four bits are considered only.
+
+| /             | < |   |   | > | <   |     |     | >   |
+|---------------+---+---+---+---+-----+-----+-----+-----|
+| Position      | 7 | 6 | 5 | 4 | 3   | 2   | 1   | 0   |
+|---------------+---+---+---+---+-----+-----+-----+-----|
+| Display pins  |   |   |   |   | DB7 | DB6 | DB5 | DB4 |
+|               |   |   |   |   | DB3 | DB2 | DB1 | DB0 |
+|---------------+---+---+---+---+-----+-----+-----+-----|
+| Port position |   |   |   |   | PD2 | PD3 | PD4 | PD5 |
+|---------------+---+---+---+---+-----+-----+-----+-----|
+
+#+BEGIN_SRC c
+void set_data_mode(uint8_t bits){
+  bits = reverse(bits) >> 2;
+  bits = bits | (*ddrd & 11000011);
+  *ddrd = bits;
+} // set_data_mode
+#+END_SRC
+
+*** Wait functions
 
 According to the LCD datasheet, it indicates that the display requires some waiting for each command.
 
@@ -261,7 +435,7 @@ Three different amount of minimum time is required: 40 milliseconds, 37 microsec
 The Arduino UNO board has a 16MHz clock. Then, 16000000 cicles per seconds means that $\frac{1000000000 ns}{16000000Hz} = 62.5 ns/cicle$. Each assembler instruction requires 62.5ns approximately. 
 
 
-*** Wait 40 Milliseconds
+**** Wait 40 Milliseconds
 To wait 40 milliseconds (40000000 nanoseconds), the ATmega328p requires $\frac{40000000ns}{62.5 ns/cicle} = 640000 cicles$.
 
 The following function create at most 640000 operations.  
@@ -272,7 +446,7 @@ void wait_40ms(){
 }
 #+END_SRC
 
-*** Wait 37 Microseconds
+**** Wait 37 Microseconds
 To wait 37 \mu{}seconds (37000 nanoseconds), the ATmega328p requires $\frac{37000ns}{62.5 ns/cicle} = 592 cicles$.
 
 The following function ensure that at most 592 operations are executed.
@@ -283,7 +457,7 @@ void wait_37us(){
 }
 #+END_SRC
 
-*** Wait 1.52 Milliseconds
+**** Wait 1.52 Milliseconds
 Repeating the same operation as before: 1.52 milliseconds (1520000 nanoseconds), $\frac{1520000ns}{62.5 ns/cicle} = 24320 cicles$.
 
 Execute at most 24320 operations.
@@ -294,7 +468,7 @@ void wait_1_52ms(){
 }
 #+END_SRC
 
-*** Wait milliseconds
+**** Wait milliseconds
 $\frac{1000000ns}{62.5ns/cicle} = 16000 cicles$ are needed for waiting 1 millisecond.
 
 #+BEGIN_SRC c
@@ -305,10 +479,12 @@ void wait_ms(unsigned long i){
 for (; i > 0; i--){
 #+END_SRC
 
-Considering three instruction for a ~for()~ sentence (add, assignation and comparison) then $16000/3 = 5333.33 cicles$. 
+Considering three instruction for a ~for()~ sentence (add, assignation and comparison) $3 \times 62.5ns = 187.5ns$, then for $1000000ns/187.5ns = 5333.33$ repetitions.
+
+In practice, considering that each repetition has 10 instructions leads to more accurate results (nearer to 1ms). $10 \times 62.5ns = 625ns$ and $1000000ns/625ns = 1600$ repetitions.
 
 #+BEGIN_SRC c
-for (unsigned int j = 0; j < 5333; j++);
+for (unsigned int j = 0; j < 1600; j++);
 #+END_SRC
 
 #+BEGIN_SRC c
@@ -316,8 +492,16 @@ for (unsigned int j = 0; j < 5333; j++);
 } // wait_ms
 #+END_SRC
 
-*** Wait until BF
+**** Wait until BF
 The BF bit is used for detecting when the LCD display is busy or not. It cannot be used at the first steps of the initialization (first and second initialization step).
+
+The command for asking BF is the following.
+
+|----+----+-----+-----+-----+-----+-----+-----+-----+-----|
+| RS | RW | DB7 | DB6 | DB5 | DB4 | DB3 | DB2 | DB1 | DB0 |
+|----+----+-----+-----+-----+-----+-----+-----+-----+-----|
+|  0 |  1 | BF  | AC6 | AC5 | AC4 | AC3 | AC2 | AC1 | AC0 |
+|----+----+-----+-----+-----+-----+-----+-----+-----+-----|
 
 #+BEGIN_SRC c
 void wait_bf(){
@@ -326,52 +510,73 @@ void wait_bf(){
 While the BF is marking as busy, repeat.
 
 #+BEGIN_SRC c
-uint8_t busy = 1;
-while (busy == 1){
+  uint8_t busy = 1;
+  while (busy == 1){
 #+END_SRC
 
 Using the RW (PB2) bit setted for reading (on), ask for the BF bit. RS (PB4) must be off.
 
 #+BEGIN_SRC c
-*portb &= 0b11100011; // Erase PB2, PB3 and PB4
-*portb |= (1<<PB2); // Set PB2
+  rw_off(); rs_off(); e_off();
+  rw_on();
+  // *portb &= 0b11100011; // Erase PB2, PB3 and PB4
+  // *portb |= (1<<PB2); // Set PB2
 #+END_SRC
 
-Set the PD2-PD5 (D7 to D4 in display pins) for input.
+Set the PD2-PD5 (D7 to D4 in display pins) for input (receive information from LCD).
 #+BEGIN_SRC c
-*portd &= 0b11000011;
+set_data_mode(0b00000000);
+// *ddrd &= 0b11000011;
 #+END_SRC
 
 Send the enable (E bit is PB3 port) directly.
 
 #+BEGIN_SRC c
-*portb |= (1<<PB3);
+// *portb |= (1<<PB3);
+e_on();
 wait_37us();
-*portb &= 0b11110111;
+e_off();
+// *portb &= 0b11110111;
 #+END_SRC
 
 Read the BF (DB7 display port or PD2 board pin value).
 
 #+BEGIN_SRC c
-  busy = (*pind & 0b00000100) != 0;
+  busy = (get_data_bits() & 0b00001000) != 0;
 #+END_SRC
+
+Read again the lower four bits values, but ignore them.
+
+#+BEGIN_SRC c
+  e_on();
+  wait_37us();
+  e_off();
+#+END_SRC
+
+
+Restore D7 to D4 pins for output (send information to LCD).
+#+BEGIN_SRC c
+set_data_mode(0b00001111);
+#+END_SRC
+
 
 End while.
 #+BEGIN_SRC c
-}
+} // while
 #+END_SRC
 
 
 Restore PD2-PD5 ports to output mode.
 #+BEGIN_SRC c
-*portd |= 0b00111100;
+set_data_mode(0b00001111);
+// *ddrd |= 0b00111100;
 #+END_SRC
 
 Restore the RS, E and RW to zero value.
 #+BEGIN_SRC c
-*portb &= 0b11100011; // Erase PB2, PB3 and PB4
+rs_off(); e_off(); rw_off();
+// *portb &= 0b11100011; // Erase PB2, PB3 and PB4
 #+END_SRC
-
 
 End function.
 
@@ -379,7 +584,7 @@ End function.
 } // wait_bf
 #+END_SRC
 
-** Sending the Enable Signal
+*** Sending the Enable Signal
 The following command tells the display that the data is ready to read. Each time the MPU send a command to the display, it must set the data at the D7-D4 (when using 4bit mode), RS and RW display's pins and then set the E pin on. When the display detects the falling edge of the E bit, the data is red and the command is executed.
 
 For this reason, the PB3 bit (connected to the E pin at the display) must be turned on, wait for a little time, and the turned off. This creates the falling edge needed. 
@@ -387,14 +592,14 @@ For this reason, the PB3 bit (connected to the E pin at the display) must be tur
 #+BEGIN_SRC c
 void send_enable(){
   // Enable when falling edge
-  *portb |= (1<<PB3);
+  e_on();
   wait_37us();
-  *portb &= 0b11110111;
+  e_off();
   wait_37us();
-}
+} // send_enable
 #+END_SRC
 
-** The initialization
+** The Initialization
 The initialization process for a 4bit interface consist on the following steps. The bits are the following: RS, RW and DB7, DB6, DB5, DB5.
 
 When two set of 6 bits appears, it means that the first is sended, the enable bit turned on and off, then the second set is sended turning on and off the enable bit at the end.
@@ -419,21 +624,27 @@ Whenever it is in each of these states, to reset the display it must receive the
 
 
 *** First Function Set Command
-This set the display at the 8bit interface mode.
+This set the display at the 8bit interface mode. Sends the first ~0b0011_xxxx~ bits.
 
 |-----+-----+-----+-----+-----+-----+-----+-----|
-| PD7 | PD6 | PD5 | PD4 | PD3 | PD2 | PD1 | PD0 |
-|     |     | DB4 | DB5 | DB6 | DB7 |     |     |
+| DB7 | DB6 | DB5 | DB4 | DB3 | DB2 | DB1 | DB0 |
 |-----+-----+-----+-----+-----+-----+-----+-----|
-|   0 |   0 | 1   | 1   | 0   | 0   |   0 |   0 |
+|   0 |   0 | 1   | 1   | X   | X   |   X |   X |
 |-----+-----+-----+-----+-----+-----+-----+-----|
 
 #+BEGIN_SRC c
 void send_function_set1(){
-  *portd = 0b00110000;
-  // (0<<PD2) | (0<<PD3) | (1<<PD4) | (1<<PD5);
+#+END_SRC
+
+Send the upper four bits.
+
+#+BEGIN_SRC c
+  set_data_bits(0b00110000, DUPPER);
   send_enable();
-}
+#+END_SRC
+
+#+BEGIN_SRC c
+} // send_function_set1
 #+END_SRC
 
 *** Second Function Set Command
@@ -449,33 +660,24 @@ void send_function_set2(){
 The following send two sets of 4 bits. The first set is:
 
 |-----+-----+-----+-----+-----+-----+-----+-----|
-| PD7 | PD6 | PD5 | PD4 | PD3 | PD2 | PD1 | PD0 |
-|     |     | DB4 | DB5 | DB6 | DB7 |     |     |
+| DB7 | DB6 | DB5 | DB4 | DB3 | DB2 | DB1 | DB0 |
 |-----+-----+-----+-----+-----+-----+-----+-----|
-|   0 |   0 | 0   | 1   | 0   | 0   |   0 |   0 |
+| 0   | 0   | 1   | 0   | X   | X   | X   | X   |
+| N   | F   | X   | X   | X   | X   | X   | X   |
 |-----+-----+-----+-----+-----+-----+-----+-----|
 
 #+BEGIN_SRC c
-  *portd = 0b00010000;
-    // (0<<PD2) | (0<<PD3) | (1<<PD4) | (0<<PD5);
+  set_data_bits(0b00100000, DUPPER);
   send_enable();
 #+END_SRC
 
 
 The second set defines the F and N bits.
 
-|-----+-----+-----+-----+-----+-----+-----+-----|
-| PD7 | PD6 | PD5 | PD4 | PD3 | PD2 | PD1 | PD0 |
-|     |     | DB4 | DB5 | DB6 | DB7 |     |     |
-|-----+-----+-----+-----+-----+-----+-----+-----|
-|   0 |   0 | 0   | 0   | F   | N   |   0 |   0 |
-|-----+-----+-----+-----+-----+-----+-----+-----|
-
 #+BEGIN_SRC c
-  *portd = 0b00000000 | (N<<PD2) | (F<<PD3);
-    // (N<<PD2) | (F<<PD3) | (0<<PD4) | (0<<PD5);
+  set_data_bits(0b00000000 | (N<<7) | (F<<6), DUPPER);
   send_enable();  
-}
+} // send_function_set2
 #+END_SRC
 
 *** Third Function Set Command
@@ -484,7 +686,7 @@ Is the same as the last. This is an alias to the last function.
 #+BEGIN_SRC c
   void send_function_set3(){
     send_function_set2();
-  }
+  } // send_function_set3
 #+END_SRC
 
 *** Display On or Off Function
@@ -494,66 +696,23 @@ This function determines three configurations:
 - If the cursor is on (C bit)
 - If the cursor position is on (B bit)
 
-For this, the command 0b0000_1DCB must be sended
+For this, the command ~0b0000_1DCB~ must be sended
+
+Now it is possible to use the BF command, and for this reason the ~lcd_send_command~ introduced at the [[*Send Raw Command function][Send Raw Command function]] section can be used.
 
 #+BEGIN_SRC c
 void send_display_onoff(){
-#+END_SRC
-
-This sends the first 4 bits.
-
-|-----+-----+-----+-----+-----+-----+-----+-----|
-| PD7 | PD6 | PD5 | PD4 | PD3 | PD2 | PD1 | PD0 |
-|     |     | DB4 | DB5 | DB6 | DB7 |     |     |
-|-----+-----+-----+-----+-----+-----+-----+-----|
-|   0 |   0 | 0   | 0   | 0   | 0   |   0 |   0 |
-|-----+-----+-----+-----+-----+-----+-----+-----|
-
-#+BEGIN_SRC c
-  *portd = 0b00000000;
-  // (0<<PD2) | (0<<PD3) | (0<<PD4) | (0<<PD5);
-  send_enable();
-#+END_SRC
-
-Then, send the following 4 bits.
-
-#+BEGIN_SRC c
-  *portd = 0b00000100 | (D<<PD3) | (C<<PD4) | (B<<PD5);
-    // (1<<PD2) | (D<<PD3) | (C<<PD4) | (B<<PD5);
-  send_enable();
+  lcd_send_command(0, 0b00001000 | (D<<2) | (C<<1) | (B<<0));
 }
 #+END_SRC
 
 *** Display Clear Command 
-The clear display command is the following: 0b0000_0001.
+The clear display command is the following: ~0b0000_0001~. After that, the MPU must wait 1.52ms. It is possible to use the ~lcd_clear~ function introduced at section [[*Clear display function][Clear display function]].
 
 #+BEGIN_SRC c
 void send_display_clear(){
-#+END_SRC
-
-
-The first 4 bits are zeroed.
-
-#+BEGIN_SRC c
-  *portd = 0b00000000;
-    // (0<<PD2) | (0<<PD3) | (0<<PD4) | (0<<PD5);
-  send_enable();
-#+END_SRC
-
-The second set are the following.
-
-|-----+-----+-----+-----+-----+-----+-----+-----|
-| PD7 | PD6 | PD5 | PD4 | PD3 | PD2 | PD1 | PD0 |
-|     |     | DB4 | DB5 | DB6 | DB7 |     |     |
-|-----+-----+-----+-----+-----+-----+-----+-----|
-|   0 |   0 | 1   | 0   | 0   | 0   |   0 |   0 |
-|-----+-----+-----+-----+-----+-----+-----+-----|
-
-#+BEGIN_SRC c
-  *portd = 0b00100000;
-  // (0<<PD2) | (0<<PD3) | (0<<PD4) | (1<<PD5);
-  send_enable();
-}
+  lcd_clear();
+} // send_display_clear
 #+END_SRC
 
 *** Entry Mode Set Command
@@ -562,35 +721,12 @@ The entry mode set command determines:
 - the cursor direction (ID bit) and
 - the display shift (S bit).
 
-The command is 0b0000_01(ID)S.
+The command is ~0b0000_01(ID)S~.
 
 #+BEGIN_SRC c
 void send_entry_modeset(){
-#+END_SRC
-
-Send the first four bits.
-
-#+BEGIN_SRC c
-  *portd = 0b00000000;
-  // (0<<PD2) | (0<<PD3) | (0<<PD4) | (0<<PD5);
-  send_enable();
-#+END_SRC
-
-Send the second set of bits.
-
-|-----+-----+-----+-----+-----+-----+-----+-----|
-| PD7 | PD6 | PD5 | PD4 | PD3 | PD2 | PD1 | PD0 |
-|     |     | DB4 | DB5 | DB6 | DB7 |     |     |
-|-----+-----+-----+-----+-----+-----+-----+-----|
-|   0 |   0 | ID  | S   | 1   | 0   |   0 |   0 |
-|-----+-----+-----+-----+-----+-----+-----+-----|
-
-
-#+BEGIN_SRC c
-  *portd = 0b00001000 | (ID<<PD4) | (S<<PD5);
-    // (0<<PD2) | (1<<PD3) | (ID<<PD4) | (S<<PD5);
-  send_enable();
-}
+  lcd_send_command(0, 0b00000100 | (ID<<1) | (S<<0));
+} // send_entry_modeset
 #+END_SRC
 
 *** Init function
@@ -603,15 +739,19 @@ void lcd_init(){
 Before sending the commands, set the arduino D ports mode as output and zero them.
 
 #+BEGIN_SRC c
-  *ddrd |= (1<<DDD5) | (1<<DDD4) | (1<<DDD3) | (1<<DDD2);
-  *portd = 0b00000000;
+  set_data_mode(0b00001111);
+  set_data_bits(0b00000000, 0);
+  // *ddrd |= (1<<DDD5) | (1<<DDD4) | (1<<DDD3) | (1<<DDD2);
+  // *portd = 0b00000000;
 #+END_SRC
 
 Same for B ports. But only for DDB2, DDB3 and DDB4 ports.
 
 #+BEGIN_SRC c
-  *ddrb |= (1<<DDB2) | (1<<DDB3) | (1<<DDB4);
-  *portb = 0b00000000;
+  set_ersrw_mode();
+  e_off(); rs_off(); rw_off();
+  // *ddrb |= (1<<DDB2) | (1<<DDB3) | (1<<DDB4);
+  // *portb = 0b00000000;
 #+END_SRC
 
 Follow the initialization process. First, wait 40 milliseconds.
@@ -660,24 +800,10 @@ Finally, send the entry mode set.
 End the init process.
 
 #+BEGIN_SRC c
-}
+} // lcd_init
 #+END_SRC
 
-** A simple function for reversing bits
-This reverse bits.
-
-0b0100 \to 0b0010
-
-#+BEGIN_SRC c
-unsigned char reverse(unsigned char b) {
-   b = (b & 0xF0) >> 4 | (b & 0x0F) << 4;
-   b = (b & 0xCC) >> 2 | (b & 0x33) << 2;
-   b = (b & 0xAA) >> 1 | (b & 0x55) << 1;
-   return b;
-}
-#+END_SRC
-
-** Send character
+** Send character function
 #+BEGIN_SRC c
 void lcd_send_char(char c){
 #+END_SRC
@@ -693,48 +819,27 @@ wait_bf();
 Set the RS to 1 for setting the RAM.
 
 #+BEGIN_SRC c
-*portb |= (1<<PB4);
+rs_on();
 #+END_SRC
 
-Reverse the char for suiting to the DB7-0 numbers.
-#+BEGIN_SRC c
-uint8_t cr = reverse(c);
-#+END_SRC
-
-
-Send the first four bits of data. The D ports has to have the following values.
-
-|-----+-----+------+------+------+------+-----+-----|
-| PD7 | PD6 | PD5  | PD4  | PD3  | PD2  | PD1 | PD0 |
-|     |     | DB4  | DB5  | DB6  | DB7  |     |     |
-|-----+-----+------+------+------+------+-----+-----|
-|   0 |   0 | c(4) | c(5) | c(6) | c(7) |   0 |   0 |
-|-----+-----+------+------+------+------+-----+-----|
+Set the upper four bits of data and send it.
 
 #+BEGIN_SRC c
-*portd = 0b00111100 & (cr << 2);
+set_data_bits(c, 1);
 send_enable();
 #+END_SRC
 
-Send the last four bits of data.
-
-|-----+-----+------+------+------+------+-----+-----|
-| PD7 | PD6 | PD5  | PD4  | PD3  | PD2  | PD1 | PD0 |
-|     |     | DB0  | DB1  | DB2  | DB3  |     |     |
-|-----+-----+------+------+------+------+-----+-----|
-|   0 |   0 | c(0) | c(1) | c(2) | c(3) |   0 |   0 |
-|-----+-----+------+------+------+------+-----+-----|
-
+Set the lower four bits of data and send it.
 
 #+BEGIN_SRC c
-*portd = 0b00111100 & (cr >> 2);
+set_data_bits(c, 0);
 send_enable();
 #+END_SRC
 
 Restore RS at zero, just in case.
 
 #+BEGIN_SRC c
-*portb &= 0b11101111;
+rs_off();
 #+END_SRC
 
 Wait until LCD is not busy.
@@ -747,7 +852,9 @@ wait_bf();
 }
 #+END_SRC
 
-** Send Raw Command
+** Send Raw Command function
+This function send 8 bits of data along with the RS bit.
+
 #+BEGIN_SRC c
 void lcd_send_command(int rs, uint8_t bin){
 #+END_SRC
@@ -756,53 +863,31 @@ Before sending the data, set the RS bit.
 
 #+BEGIN_SRC c
   if (rs == 1) {
-    ,*portb |= (1<<PB4);
+    rs_on();
    }else{
-    ,*portb &= 0b11101111;
+    rs_off();
    }
 #+END_SRC
 
-Reverse the bits of bin:
+Send the upper four bits of data.
 
 #+BEGIN_SRC c
-uint8_t binr = reverse(bin);
-#+END_SRC
-
-Send the first four bits of data. The D ports has to have the following values.
-
-|-----+-----+--------+--------+--------+--------+-----+-----|
-| PD7 | PD6 | PD5    | PD4    | PD3    | PD2    | PD1 | PD0 |
-|     |     | DB4    | DB5    | DB6    | DB7    |     |     |
-|-----+-----+--------+--------+--------+--------+-----+-----|
-|   0 |   0 | bin(4) | bin(5) | bin(6) | bin(7) |   0 |   0 |
-|-----+-----+--------+--------+--------+--------+-----+-----|
-
-#+BEGIN_SRC c
-*portd = 0b00111100 & (binr<<2);
+set_data_bits(bin, 1);
 send_enable();
 #+END_SRC
 
-Send the last four bits of data.
-
-|-----+-----+--------+--------+--------+--------+-----+-----|
-| PD7 | PD6 | PD5    | PD4    | PD3    | PD2    | PD1 | PD0 |
-|     |     | DB4    | DB5    | DB6    | DB7    |     |     |
-|-----+-----+--------+--------+--------+--------+-----+-----|
-|   0 |   0 | bin(0) | bin(1) | bin(2) | bin(3) |   0 |   0 |
-|-----+-----+--------+--------+--------+--------+-----+-----|
-
+Send the lower four bits of data.
 
 #+BEGIN_SRC c
-*portd = 0b00111100 & (binr>>2);
+set_data_bits(bin, 0);
 send_enable();
 #+END_SRC
 
 Reset the port b.
 
 #+BEGIN_SRC c
-*portb &= 0b11101111;
+rs_off();
 #+END_SRC
-
 
 Wait until LCD is not busy.
 
@@ -815,9 +900,16 @@ wait_bf();
 #+END_SRC
 
 ** Clear display function
+This command clear the memory and the screen.
+
+The command is ~0b0000_0001~ with RS and RW setted to zero. After sending the command, the MPU must wait at least 1.52ms before sending another instruction. 
+
+In this case, the function will wait for the BF bit instead of 1.52ms.
+
 #+BEGIN_SRC c
   void lcd_clear(){
     lcd_send_command(0, 0b00000001);
+    wait_1_52ms();
     wait_bf();
   }
 #+END_SRC
@@ -830,7 +922,7 @@ wait_bf();
   }
 #+END_SRC
 
-** Set DDRAM Address
+** Set DDRAM Address function
 #+BEGIN_SRC c
   void lcd_ddram_addr(uint8_t addr){
     lcd_send_command(0, 0b10000000 | addr);
@@ -838,8 +930,7 @@ wait_bf();
   }
 #+END_SRC
 
-
-** Send string
+** Send string function
 
 #+BEGIN_SRC c
 void lcd_send_string(char *s, unsigned int delay){
@@ -862,7 +953,7 @@ For each character, until the ~\0~ character, send them one by one.
 } // lcd_send_string
 #+END_SRC
 
-** Move display or cursor
+** Move display or cursor functions
 The following functions send the Cursor or Display Shift instruction. It has the following format.
 
 |----+----+-----+-----+-----+-----+-----+-----+-----+-----|
@@ -962,7 +1053,7 @@ lcd_init();
 Repeat forever.
 
 #+BEGIN_SRC c
-while (1) {
+ while (1) {
 #+END_SRC
 
 - Clear the LCD.
@@ -980,7 +1071,7 @@ while (1) {
 
 Start at the DDRAM zero.
 
-#+BEGIN_SRC c
+#+BEGIN_SRC c 
    lcd_ddram_addr(0);
 #+END_SRC
 
@@ -1001,20 +1092,17 @@ Send hello.
 
 Start at the 40 DDRAM address.
 
-#+BEGIN_SRC c
+#+BEGIN_SRC c 
    lcd_ddram_addr(40);
 #+END_SRC
 
 Send world.
 
-#+BEGIN_SRC c
+#+BEGIN_SRC c 
   lcd_send_string("world", 40);
   wait();
   wait();
 #+END_SRC
-
-
-
 
 #+BEGIN_SRC c
 } 
@@ -1034,7 +1122,7 @@ End main function.
 * Meta     :noexport:
 
   # ----------------------------------------------------------------------
-  #+TITLE:  Library for controlling a simple LCD screen
+  #+TITLE:  Library for an LCD screen
   #+AUTHOR: Christian Gimenez
   #+DATE:   22 jun 2019
   #+EMAIL:
@@ -1057,9 +1145,9 @@ End main function.
   #+HTML_LINK_HOME: ../../index.html
 
   # -- For ox-twbs or HTML Export
-  #+HTML_HEAD: <link href="libs/bootstrap.min.css" rel="stylesheet">
-  #+HTML_HEAD: <script src="libs/jquery.min.js"></script> 
-  #+HTML_HEAD: <script src="libs/bootstrap.min.js"></script>
+  #+HTML_HEAD: <link href="../../libs/bootstrap.min.css" rel="stylesheet">
+  #+HTML_HEAD: <script src="../../libs/jquery.min.js"></script> 
+  #+HTML_HEAD: <script src="../../libs/bootstrap.min.js"></script>
   #+LANGUAGE: en
 
   # Local Variables:

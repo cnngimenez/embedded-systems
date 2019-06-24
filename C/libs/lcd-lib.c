@@ -23,12 +23,73 @@
 
 #include <avr/io.h>
 
+#define DUPPER 1
+#define DLOWER 0
+
 volatile uint8_t *ddrb = (uint8_t*) (0x24);
 volatile uint8_t *portb = (uint8_t*) (0x25);
 
 volatile uint8_t *pind = (uint8_t*) (0x29);
 volatile uint8_t *ddrd = (uint8_t*) (0x2a);
 volatile uint8_t *portd = (uint8_t*) (0x2b);
+
+unsigned char reverse(unsigned char b) {
+   b = (b & 0xF0) >> 4 | (b & 0x0F) << 4;
+   b = (b & 0xCC) >> 2 | (b & 0x33) << 2;
+   b = (b & 0xAA) >> 1 | (b & 0x55) << 1;
+   return b;
+}
+
+void e_on(){
+  *portb |= (1<<PB3);
+} // e_on
+
+void e_off(){
+  *portb &= 0b11110111;
+} // e_off
+
+void rs_on(){
+  *portb |= (1<<PB4);
+} // rs_on
+
+void rs_off(){
+  *portb &= 0b11101111;
+} // rs_off
+
+void rw_on(){
+  *portb |= (1<<PB2); // Set PB2
+} // rw_on
+
+void rw_off(){
+  *portb &= 0b11111011; // Erase PB2 bit
+}
+
+void set_ersrw_mode(){
+  *ddrb |= (1<<DDB2) | (1<<DDB3) | (1<<DDB4);
+}
+
+void set_data_bits(uint8_t bits, uint8_t use_left){
+
+uint8_t binr = reverse(bits);
+
+if (use_left == 1){
+  *portd = 0b00111100 & (binr<<2);
+ }else{
+  *portd = 0b00111100 & (binr>>2);
+ }
+
+} // send_data_bits
+
+uint8_t get_data_bits(){
+  uint8_t data = *pind;
+  return (reverse(data) & 00111100) >> 2;
+} // get_data_bits
+
+void set_data_mode(uint8_t bits){
+  bits = reverse(bits) >> 2;
+  bits = bits | (*ddrd & 11000011);
+  *ddrd = bits;
+} // set_data_mode
 
 void wait_40ms(){
   for (unsigned long i = 1; i < 640000; i++);
@@ -46,7 +107,7 @@ void wait_ms(unsigned long i){
 
 for (; i > 0; i--){
 
-for (unsigned int j = 0; j < 5333; j++);
+for (unsigned int j = 0; j < 1600; j++);
 
 } // for
 } // wait_ms
@@ -56,94 +117,89 @@ void wait_bf(){
 uint8_t busy = 1;
 while (busy == 1){
 
-*portb &= 0b11100011; // Erase PB2, PB3 and PB4
-*portb |= (1<<PB2); // Set PB2
+rw_off(); rs_off(); e_off();
+rw_on();
+// *portb &= 0b11100011; // Erase PB2, PB3 and PB4
+// *portb |= (1<<PB2); // Set PB2
 
-*portd &= 0b11000011;
+set_data_mode(0b00000000);
+// *ddrd &= 0b11000011;
 
-*portb |= (1<<PB3);
+// *portb |= (1<<PB3);
+e_on();
 wait_37us();
-*portb &= 0b11110111;
+e_off();
+// *portb &= 0b11110111;
 
-busy = (*pind & 0b00000100) != 0;
+busy = (get_data_bits() & 0b00001000) != 0;
 
-}
+e_on();
+wait_37us();
+e_off();
 
-*portd |= 0b00111100;
+set_data_mode(0b00001111);
 
-*portb &= 0b11100011; // Erase PB2, PB3 and PB4
+} // while
+
+set_data_mode(0b00001111);
+// *ddrd |= 0b00111100;
+
+rs_off(); e_off(); rw_off();
+// *portb &= 0b11100011; // Erase PB2, PB3 and PB4
 
 } // wait_bf
 
 void send_enable(){
   // Enable when falling edge
-  *portb |= (1<<PB3);
+  e_on();
   wait_37us();
-  *portb &= 0b11110111;
+  e_off();
   wait_37us();
-}
+} // send_enable
 
 void send_function_set1(){
-  *portd = 0b00110000;
-  // (0<<PD2) | (0<<PD3) | (1<<PD4) | (1<<PD5);
-  send_enable();
-}
+
+set_data_bits(0b00110000, DUPPER);
+send_enable();
+
+} // send_function_set1
 
 void send_function_set2(){
 
-*portd = 0b00010000;
-  // (0<<PD2) | (0<<PD3) | (1<<PD4) | (0<<PD5);
+set_data_bits(0b00100000, DUPPER);
 send_enable();
 
-*portd = 0b00000000 | (N<<PD2) | (F<<PD3);
-    // (N<<PD2) | (F<<PD3) | (0<<PD4) | (0<<PD5);
+set_data_bits(0b00000000 | (N<<7) | (F<<6), DUPPER);
   send_enable();  
-}
+} // send_function_set2
 
 void send_function_set3(){
   send_function_set2();
-}
+} // send_function_set3
 
 void send_display_onoff(){
-
-*portd = 0b00000000;
-// (0<<PD2) | (0<<PD3) | (0<<PD4) | (0<<PD5);
-send_enable();
-
-*portd = 0b00000100 | (D<<PD3) | (C<<PD4) | (B<<PD5);
-    // (1<<PD2) | (D<<PD3) | (C<<PD4) | (B<<PD5);
-  send_enable();
+  lcd_send_command(0, 0b00001000 | (D<<2) | (C<<1) | (B<<0));
 }
 
 void send_display_clear(){
-
-*portd = 0b00000000;
-  // (0<<PD2) | (0<<PD3) | (0<<PD4) | (0<<PD5);
-send_enable();
-
-*portd = 0b00100000;
-  // (0<<PD2) | (0<<PD3) | (0<<PD4) | (1<<PD5);
-  send_enable();
-}
+  lcd_clear();
+} // send_display_clear
 
 void send_entry_modeset(){
-
-*portd = 0b00000000;
-// (0<<PD2) | (0<<PD3) | (0<<PD4) | (0<<PD5);
-send_enable();
-
-*portd = 0b00001000 | (ID<<PD4) | (S<<PD5);
-    // (0<<PD2) | (1<<PD3) | (ID<<PD4) | (S<<PD5);
-  send_enable();
-}
+  lcd_send_command(0, 0b00000100 | (ID<<1) | (S<<0));
+} // send_entry_modeset
 
 void lcd_init(){
 
-*ddrd |= (1<<DDD5) | (1<<DDD4) | (1<<DDD3) | (1<<DDD2);
-*portd = 0b00000000;
+set_data_mode(0b00001111);
+set_data_bits(0b00000000, 0);
+// *ddrd |= (1<<DDD5) | (1<<DDD4) | (1<<DDD3) | (1<<DDD2);
+// *portd = 0b00000000;
 
-*ddrb |= (1<<DDB2) | (1<<DDB3) | (1<<DDB4);
-*portb = 0b00000000;
+set_ersrw_mode();
+e_off(); rs_off(); rw_off();
+// *ddrb |= (1<<DDB2) | (1<<DDB3) | (1<<DDB4);
+// *portb = 0b00000000;
 
 wait_40ms();
 
@@ -164,30 +220,21 @@ wait_1_52ms();
 
 send_entry_modeset();
 
-}
-
-unsigned char reverse(unsigned char b) {
-   b = (b & 0xF0) >> 4 | (b & 0x0F) << 4;
-   b = (b & 0xCC) >> 2 | (b & 0x33) << 2;
-   b = (b & 0xAA) >> 1 | (b & 0x55) << 1;
-   return b;
-}
+} // lcd_init
 
 void lcd_send_char(char c){
 
 wait_bf();
 
-*portb |= (1<<PB4);
+rs_on();
 
-uint8_t cr = reverse(c);
-
-*portd = 0b00111100 & (cr << 2);
+set_data_bits(c, 1);
 send_enable();
 
-*portd = 0b00111100 & (cr >> 2);
+set_data_bits(c, 0);
 send_enable();
 
-*portb &= 0b11101111;
+rs_off();
 
 wait_bf();
 
@@ -196,20 +243,18 @@ wait_bf();
 void lcd_send_command(int rs, uint8_t bin){
 
 if (rs == 1) {
-  *portb |= (1<<PB4);
+  rs_on();
  }else{
-  *portb &= 0b11101111;
+  rs_off();
  }
 
-uint8_t binr = reverse(bin);
-
-*portd = 0b00111100 & (binr<<2);
+set_data_bits(bin, 1);
 send_enable();
 
-*portd = 0b00111100 & (binr>>2);
+set_data_bits(bin, 0);
 send_enable();
 
-*portb &= 0b11101111;
+rs_off();
 
 wait_bf();
 
@@ -217,6 +262,7 @@ wait_bf();
 
 void lcd_clear(){
   lcd_send_command(0, 0b00000001);
+  wait_1_52ms();
   wait_bf();
 }
 
