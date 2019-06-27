@@ -351,3 +351,29 @@ for (uint8_t i = 0; i < 8; i++){
 void lcd_print_cgram(uint8_t num, uint8_t ddram_addr){
   lcd_send_char(num, ddram_addr);
 }
+
+void lcd_entry_mode(uint8_t cursor, uint8_t shift){
+  if (cursor > 0){
+    cursor = 1;
+  }
+  if (shift > 0){
+    shift = 1;
+  }
+  lcd_send_command(0, 0b00000100 | (cursor<<1) | (shift<<0));
+}
+
+void lcd_display_mode(uint8_t display, uint8_t cursor, uint8_t blink){
+  if (display > 0){ display = 1; }
+  if (cursor > 0){ cursor = 1; }
+  if (blink > 0){ blink = 1; }
+  lcd_send_command(0, 0b00001000 
+                   | (display<<2)
+                   | (cursor<<1)
+                   | (blink<<0));
+}
+
+void lcd_function_set(uint8_t lines, uint8_t font){
+  if (lines > 0){ lines = 1; }
+  if (font > 0){ font = 1; }
+  lcd_send_command(0, 0b00100000 | (lines<<3) | (font<<2));
+}

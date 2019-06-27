@@ -86,6 +86,8 @@ Include integer subtypes definitions (like ~uint8_t~).
 #+END_SRC
 
 ** Configuration constants
+These constants are applied at initialization state. Consider the reference in section [[*Bits Names and Configuration][Bits Names and Configuration]].
+
 #+BEGIN_SRC c
 /**
  Interface data is 8/4 bits.
@@ -202,6 +204,44 @@ void lcd_set_cgram(uint8_t num, uint8_t pattern[8]);
 Print the CGRAM character created at the given number.
 #+BEGIN_SRC c
 void lcd_print_cgram(uint8_t num, uint8_t ddra_addr);
+#+END_SRC
+
+*** Change Modes
+These functions change the modes defined at initialization state. Their implementation are in section [[*Change Modes Implementation][Change Modes Implementation]].
+
+**** Change Entry Mode
+Send the command to change the entry mode. Also define some constants for better interpretation of the parameters.
+
+#+BEGIN_SRC c
+#define CURSOR_DECREMENT 0
+#define CURSOR_INCREMENT 1
+#define SHIFT_ENABLE 1
+#define SHIFT_STATIC 0
+void lcd_entry_mode(uint8_t cursor, uint8_t shift);
+#+END_SRC
+
+**** Change Display Mode
+Change the cursor or blinking mode. Also, the entire display can be turned on or off.
+
+#+BEGIN_SRC c
+#define DISPLAY_ON 1
+#define DISPLAY_OFF 0
+#define CURSOR_ON 1
+#define CURSOR_OFF 0
+#define BLINK_ON 1
+#define BLINK_OFF 0
+void lcd_display_mode(uint8_t display, uint8_t cursor, uint8_t blink);
+#+END_SRC
+
+**** Change Function Set
+Change the font or number of lines. Function set command also can change the interface bit, but in this case this is ignored in order to maintain the four bits.
+
+#+BEGIN_SRC c
+#define N_DOUBLE_LINES 1
+#define N_SINGLE_LINE 0
+#define FONT_LARGE 1
+#define FONT_SMALL 0
+void lcd_function_set(uint8_t lines, uint8_t font);
 #+END_SRC
 
 ** End header
@@ -1122,15 +1162,87 @@ void lcd_print_cgram(uint8_t num, uint8_t ddram_addr){
 }
 #+END_SRC
 
-* Test file
-:PROPERTIES:
-:header-args: :comments no :padline yes :tangle tests/lcd-send.c
-:END:
+** Change Modes Implementation
+The following functions change the modes of the LCD display. They can change the cursor, display or the way the cursor increments or decrements.
 
-Include the LCD library.
+*** Change Entry Mode
+The entry mode command has the following format.
+
+|----+----+-----+-----+-----+-----+-----+-----+-----+-----|
+| RS | RW | DB7 | DB6 | DB5 | DB4 | DB3 | DB2 | DB1 | DB0 |
+|----+----+-----+-----+-----+-----+-----+-----+-----+-----|
+|  0 |  0 |   0 |   0 |   0 |   0 |   0 |   1 | ID  | S   |
+|----+----+-----+-----+-----+-----+-----+-----+-----+-----|
+
+Where ID is the increment of the cursor and S is the shift of the screen when each entry is made.
+
+In this function, the ~cursor~ and ~shift~ parameters are checked when they have a value different than 0 or 1.
 
 #+BEGIN_SRC c
-#include "../lcd-lib.h"
+void lcd_entry_mode(uint8_t cursor, uint8_t shift){
+  if (cursor > 0){
+    cursor = 1;
+  }
+  if (shift > 0){
+    shift = 1;
+  }
+  lcd_send_command(0, 0b00000100 | (cursor<<1) | (shift<<0));
+}
+#+END_SRC
+
+*** Change Display Mode
+The cursor mode command is the following.
+
+|----+----+-----+-----+-----+-----+-----+-----+-----+-----|
+| RS | RW | DB7 | DB6 | DB5 | DB4 | DB3 | DB2 | DB1 | DB0 |
+|----+----+-----+-----+-----+-----+-----+-----+-----+-----|
+|  0 |  0 |   0 |   0 |   0 |   0 |   1 | D   | C   | B   |
+|----+----+-----+-----+-----+-----+-----+-----+-----+-----|
+
+Where D is the display, C is the cursor and B is the blinking. 
+
+This function checks if the parameters have 1 or 0 values.
+
+#+BEGIN_SRC c
+  void lcd_display_mode(uint8_t display, uint8_t cursor, uint8_t blink){
+    if (display > 0){ display = 1; }
+    if (cursor > 0){ cursor = 1; }
+    if (blink > 0){ blink = 1; }
+    lcd_send_command(0, 0b00001000 
+                     | (display<<2)
+                     | (cursor<<1)
+                     | (blink<<0));
+  }
+#+END_SRC
+
+*** Change Function Set
+The function set command is the following.
+
+|----+----+-----+-----+-----+-----+-----+-----+-----+-----|
+| RS | RW | DB7 | DB6 | DB5 | DB4 | DB3 | DB2 | DB1 | DB0 |
+|----+----+-----+-----+-----+-----+-----+-----+-----+-----|
+|  0 |  0 |   0 |   0 |   1 | DL  | N   | F   | X   | X   |
+|----+----+-----+-----+-----+-----+-----+-----+-----+-----|
+
+Where DL, N and F are the interface data, the number of lines and the font size respectively. X can be any value.
+
+#+BEGIN_SRC c
+void lcd_function_set(uint8_t lines, uint8_t font){
+  if (lines > 0){ lines = 1; }
+  if (font > 0){ font = 1; }
+  lcd_send_command(0, 0b00100000 | (lines<<3) | (font<<2));
+}
+#+END_SRC
+
+* Test file
+:PROPERTIES:
+:header-args: :comments no :padline yes :mkdirp t :tangle tests/lcd/lcd-send.c
+:END:
+
+Include the LCD library. Ensure that the ~-IPATH-TO-THE-LCD-HEADER~ parameter is provided to the GCC file. 
+
+#+BEGIN_SRC c
+#include "lcd-lib.h"
 #+END_SRC
 
 A simple function for wating a little.
@@ -1147,6 +1259,7 @@ Start main function.
 void main(){
 #+END_SRC
 
+** Initialization
 Initialize the LCD.
 
 #+BEGIN_SRC c
@@ -1159,17 +1272,12 @@ Repeat forever.
  while (1) {
 #+END_SRC
 
-- Clear the LCD.
-- Set the 2 columns and a nice font.
-- Increment the cursor and don't shift the screen while adding characters.
-- Display cursor without blinking. 
+** Write Something
+First clear the LCD. Second write with ~lcd_send_char()~. Third, write something with ~lcd_send_string()~. See section [[*Send a char][Send a char]] and [[*Send a string][Send a string]] for documentation of these functions.
 
 #+BEGIN_SRC c
-   lcd_clear();
-   lcd_send_command(0, 0b00101100); // function set
-   lcd_send_command(0, 0b00010100); // cursor display
-   lcd_send_command(0, 0b00000110); // Entry mode set
-   lcd_send_command(0, 0b00001110); // display on/off
+lcd_clear();
+lcd_entry_mode(CURSOR_INCREMENT, SHIFT_STATIC);
 #+END_SRC
 
 Send hello.
@@ -1195,8 +1303,114 @@ Start at the 40 DDRAM address. Send world.
   wait();
 #+END_SRC
 
+** CGRAM Test
+Create a character and set it to the zero position.
+
 #+BEGIN_SRC c
-} 
+ uint8_t char0[] = {
+		  0b00000100,
+		  0b00001110,
+		  0b00011111,
+		  0b00000100,
+		  0b00011111,
+		  0b00001110,
+		  0b00000100,
+		  0b00000000	  
+ };
+ lcd_set_cgram(0, char0);
+#+END_SRC
+
+Print it.
+
+#+BEGIN_SRC c
+lcd_print_cgram(0, 255);
+#+END_SRC
+
+** Test movement
+Move the cursor left and right.
+
+#+BEGIN_SRC c
+lcd_cursor_left(80, 50);
+lcd_cursor_right(80, 50);
+#+END_SRC
+
+Move the display left and right.
+
+#+BEGIN_SRC c
+lcd_display_left(40, 50);
+lcd_display_right(40, 50);
+#+END_SRC
+
+Return home.
+
+#+BEGIN_SRC c
+lcd_return_home();
+wait();
+#+END_SRC
+
+** Test All Modes
+
+*** Function set mode
+Change through different function set.
+
+#+BEGIN_SRC c
+lcd_function_set(N_DOUBLE_LINES, FONT_SMALL);
+wait();
+lcd_function_set(N_SINGLE_LINE, FONT_SMALL);
+wait();
+lcd_function_set(N_DOUBLE_LINES, FONT_LARGE);
+wait();
+lcd_function_set(N_SINGLE_LINE, FONT_LARGE);
+wait();
+#+END_SRC
+
+*** Display mode
+Change through different display modes.
+
+#+BEGIN_SRC c
+   lcd_display_mode(DISPLAY_ON, CURSOR_ON, BLINK_OFF);
+   wait();
+   lcd_display_mode(DISPLAY_OFF, CURSOR_ON, BLINK_OFF);
+   wait();
+   lcd_display_mode(DISPLAY_ON, CURSOR_ON, BLINK_OFF);
+   wait();
+   lcd_display_mode(DISPLAY_ON, CURSOR_OFF, BLINK_OFF);
+   wait();
+   lcd_display_mode(DISPLAY_ON, CURSOR_ON, BLINK_ON);
+   wait();
+   lcd_display_mode(DISPLAY_ON, CURSOR_ON, BLINK_OFF);
+   wait();
+#+END_SRC
+
+*** Entry Mode
+Change through different display modes.
+
+#+BEGIN_SRC c
+  lcd_clear();
+  lcd_entry_mode(CURSOR_DECREMENT, SHIFT_STATIC);
+  lcd_send_string("Cursor Decrement", 0, 50);
+  lcd_send_string("Shift Static", 40, 50);
+  wait();
+  lcd_clear();
+  lcd_entry_mode(CURSOR_INCREMENT, SHIFT_STATIC);
+  lcd_send_string("Cursor Increment", 0, 50);
+  lcd_send_string("Shift Static", 40, 50);
+  wait();
+  lcd_clear();
+  lcd_entry_mode(CURSOR_DECREMENT, SHIFT_ENABLE);
+  lcd_send_string("Cursor Decrement", 0, 50);
+  lcd_send_string("Shift Enable", 40, 50);
+  wait();
+  lcd_clear();
+  lcd_entry_mode(CURSOR_INCREMENT, SHIFT_ENABLE);
+  lcd_send_string("Cursor Increment", 0, 50);
+  lcd_send_string("Shift Enable", 40, 50);
+  wait();
+#+END_SRC
+
+** End function
+#+BEGIN_SRC c
+} // while
 #+END_SRC
 
 End main function.

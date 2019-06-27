@@ -80,4 +80,24 @@ void lcd_set_cgram(uint8_t num, uint8_t pattern[8]);
 
 void lcd_print_cgram(uint8_t num, uint8_t ddra_addr);
 
+#define CURSOR_DECREMENT 0
+#define CURSOR_INCREMENT 1
+#define SHIFT_ENABLE 1
+#define SHIFT_STATIC 0
+void lcd_entry_mode(uint8_t cursor, uint8_t shift);
+
+#define DISPLAY_ON 1
+#define DISPLAY_OFF 0
+#define CURSOR_ON 1
+#define CURSOR_OFF 0
+#define BLINK_ON 1
+#define BLINK_OFF 0
+void lcd_display_mode(uint8_t display, uint8_t cursor, uint8_t blink);
+
+#define N_DOUBLE_LINES 1
+#define N_SINGLE_LINE 0
+#define FONT_LARGE 1
+#define FONT_SMALL 0
+void lcd_function_set(uint8_t lines, uint8_t font);
+
 #endif // _LCD_LIB_H
