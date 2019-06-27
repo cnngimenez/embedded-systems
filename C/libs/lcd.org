@@ -20,7 +20,7 @@ The following is a table that describes the connections needed and the port numb
 
 About commands, see https://mil.ufl.edu/3744/docs/lcdmanual/commands.html
 
-If the ports are changed, refer to section [[*Send 4bits][Send 4bits]], [[*Set RS bit][Set RS bit]], [[*Set RW bit][Set RW bit]] and [[*Pointers to used ports][Pointers to used ports]].
+If the ports are changed, refer to section [[*Auxiliary functions][Auxiliary functions]] and [[*Pointers to used ports][Pointers to used ports]] of the library implementation.
 
 ** Bits Names and Configuration
 The following is a table with the bit names and the meaning of each of them.
