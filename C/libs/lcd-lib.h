@@ -64,18 +64,20 @@ void lcd_clear();
 
 void lcd_return_home();
 
-void lcd_ddram_addr(uint8_t addr);
-
 void lcd_send_command(int rs, uint8_t bin);
 
-void lcd_send_char(char c);
+void lcd_send_char(char c, uint8_t addr);
 
-void lcd_send_string(char *s, unsigned int delay);
+void lcd_send_string(char *s, unsigned int delay, uint8_t addr);
 
 void lcd_display_left(unsigned int amount, unsigned int delay);
 void lcd_display_right(unsigned int amount, unsigned int delay);
 
 void lcd_cursor_left(unsigned int amount, unsigned int delay);
 void lcd_cursor_right(unsigned int amount, unsigned int delay);
+
+void lcd_set_cgram(uint8_t num, uint8_t pattern[8]);
+
+void lcd_print_cgram(uint8_t num, uint8_t ddra_addr);
 
 #endif // _LCD_LIB_H

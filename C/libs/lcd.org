@@ -143,10 +143,10 @@ Set the DDRAM address to 00H (starting). The contents are not changed.
 void lcd_return_home();
 #+END_SRC
 
-*** Use DDRAM Address
+*** Use DDRAM Address :noexport:
 Set the given DDRAM address as the current one. The address is a 7-bit number, thus it must be between 0 and 127 (although the DDRAM has 80 bytes).
 
-#+BEGIN_SRC c
+#+BEGIN_SRC c :tangle no
 void lcd_ddram_addr(uint8_t addr);
 #+END_SRC
 
@@ -160,14 +160,14 @@ void lcd_send_command(int rs, uint8_t bin);
 *** Send a char
 
 #+BEGIN_SRC c
-void lcd_send_char(char c);
+void lcd_send_char(char c, uint8_t addr);
 #+END_SRC
 
 *** Send a string
 Send characters one by one. If ~delay~ is greater than zero, then each character is sended one by one with the given delay in milliseconds.
 
 #+BEGIN_SRC c
-void lcd_send_string(char *s, unsigned int delay);
+void lcd_send_string(char *s, unsigned int delay, uint8_t addr);
 #+END_SRC
 
 *** Moving Display
@@ -186,6 +186,22 @@ Move the cursor position to the left or right. Decrement or increment the DDRAM 
 #+BEGIN_SRC c
 void lcd_cursor_left(unsigned int amount, unsigned int delay);
 void lcd_cursor_right(unsigned int amount, unsigned int delay);
+#+END_SRC
+
+*** CGRAM Mannipulation
+CGRAM is a special memory for creating personalized characters.
+
+When creating characters you need the character number and the pattern that the leds has to turn on. Depending on the font configuration, the pattern should be an 5 \times 8 or 5 \times 11.
+
+This function set the personalized pattern at the number given. ~num~ must be between 0 to 8.
+
+#+BEGIN_SRC c
+void lcd_set_cgram(uint8_t num, uint8_t pattern[8]);
+#+END_SRC
+
+Print the CGRAM character created at the given number.
+#+BEGIN_SRC c
+void lcd_print_cgram(uint8_t num, uint8_t ddra_addr);
 #+END_SRC
 
 ** End header
@@ -803,9 +819,17 @@ End the init process.
 } // lcd_init
 #+END_SRC
 
+** Set DDRAM Address function
+#+BEGIN_SRC c
+  void lcd_ddram_addr(uint8_t addr){
+    lcd_send_command(0, 0b10000000 | addr);
+    wait_bf();
+  }
+#+END_SRC
+
 ** Send character function
 #+BEGIN_SRC c
-void lcd_send_char(char c){
+void lcd_send_char(char c, uint8_t addr){
 #+END_SRC
 
 The table of the characters in the datasheet indicates that the number of the characters are the same as the ASCII code. Thus, no need for any conversion.
@@ -815,6 +839,15 @@ Before anything, wait until LCD is not busy.
 #+BEGIN_SRC c
 wait_bf();
 #+END_SRC
+
+Set the address.
+
+#+BEGIN_SRC c
+if (addr < 80){
+  lcd_ddram_addr(addr);
+}
+#+END_SRC
+
 
 Set the RS to 1 for setting the RAM.
 
@@ -922,26 +955,26 @@ In this case, the function will wait for the BF bit instead of 1.52ms.
   }
 #+END_SRC
 
-** Set DDRAM Address function
-#+BEGIN_SRC c
-  void lcd_ddram_addr(uint8_t addr){
-    lcd_send_command(0, 0b10000000 | addr);
-    wait_bf();
-  }
-#+END_SRC
-
 ** Send string function
 
 #+BEGIN_SRC c
-void lcd_send_string(char *s, unsigned int delay){
+void lcd_send_string(char *s, unsigned int delay, uint8_t addr){
+#+END_SRC
+
+Set the address.
+
+#+BEGIN_SRC c
+if (addr < 80){
+  lcd_ddram_addr(addr);
+}
 #+END_SRC
 
 For each character, until the ~\0~ character, send them one by one.
 
 #+BEGIN_SRC c
-  unsigned int i = 0;
+  uint8_t i = 0;
   while (s[i] != '\0'){
-    lcd_send_char(s[i]);
+    lcd_send_char(s[i], 255);
     if (delay > 0){
       wait_ms(delay);
     }
@@ -1019,6 +1052,76 @@ void lcd_cursor_right(unsigned int amount, unsigned int delay){
 }
 #+END_SRC
 
+** CGRAM Mannipulation
+The CGRAM memory can be setted with the following command.
+
+|----+----+-----+-----+-----+-----+-----+-----+-----+-----|
+| RS | RW | DB7 | DB6 | DB5 | DB4 | DB3 | DB2 | DB1 | DB0 |
+|----+----+-----+-----+-----+-----+-----+-----+-----+-----|
+|  0 |  0 |   0 |   1 | AC5 | AC4 | AC3 | AC2 | AC1 | AC0 |
+|----+----+-----+-----+-----+-----+-----+-----+-----+-----|
+
+The AC5-0 memory defines which character is defined. Up to 8 characters can be defined. Each of them has 8 rows which corresponds to each byte of memory address.
+
+|--------------+------------------|
+| AC Addresses | Character Number |
+|--------------+------------------|
+| 0x00-0x07    |                0 |
+| 0x08-0x0f    |                1 |
+| 0x10-0x17    |                2 |
+| 0x18-0x1f    |                3 |
+| 0x20-0x27    |                4 |
+| 0x28-0x2f    |                5 |
+| 0x30-0x37    |                6 |
+| 0x38-0x3f    |                7 |
+|--------------+------------------|
+
+*** Set e CGRAM Address
+This function tells the display to use the following CGRAM address. It sends the command 0b01AAAAAA. ~addr~ must be between 0x00 and 0x3f.
+
+#+BEGIN_SRC c
+void cgram_addr(uint8_t addr){
+  if (addr <= 0x3f){
+    lcd_send_command(0, 0b01000000 | addr);
+  }
+}
+#+END_SRC
+
+
+*** Set a CGRAM character
+The following command allows to create a new character pattern.
+
+#+BEGIN_SRC c
+void lcd_set_cgram(uint8_t num, uint8_t pattern[8]){
+#+END_SRC
+
+Send the CGRAM address. This tells the display that it will receive CGRAM data instead of DDRAM one.
+
+#+BEGIN_SRC c
+cgram_addr(num*0x08);
+#+END_SRC
+
+Now, send the CGRAM data.
+
+#+BEGIN_SRC c
+for (uint8_t i = 0; i < 8; i++){
+  lcd_send_command(1, pattern[i]);
+}
+#+END_SRC
+
+#+BEGIN_SRC c
+} // lcd_set_cgram
+#+END_SRC
+
+*** Print a CGRAM Character
+Prints the CGRAM character in the DDRAM.
+
+#+BEGIN_SRC c
+void lcd_print_cgram(uint8_t num, uint8_t ddram_addr){
+  lcd_send_char(num, ddram_addr);
+}
+#+END_SRC
+
 * Test file
 :PROPERTIES:
 :header-args: :comments no :padline yes :tangle tests/lcd-send.c
@@ -1069,37 +1172,25 @@ Repeat forever.
    lcd_send_command(0, 0b00001110); // display on/off
 #+END_SRC
 
-Start at the DDRAM zero.
-
-#+BEGIN_SRC c 
-   lcd_ddram_addr(0);
-#+END_SRC
-
 Send hello.
 
 #+BEGIN_SRC c
-   lcd_send_char('h');
+   lcd_send_char('h', 0);
    wait();
-   lcd_send_char('e');
+   lcd_send_char('e', 1);
    wait();
-   lcd_send_char('l');
+   lcd_send_char('l', 2);
    wait();
-   lcd_send_char('l');
+   lcd_send_char('l', 3);
    wait();
-   lcd_send_char('o');
+   lcd_send_char('o', 4);
    wait();
 #+END_SRC
 
-Start at the 40 DDRAM address.
+Start at the 40 DDRAM address. Send world.
 
 #+BEGIN_SRC c 
-   lcd_ddram_addr(40);
-#+END_SRC
-
-Send world.
-
-#+BEGIN_SRC c 
-  lcd_send_string("world", 40);
+  lcd_send_string("world", 50, 40);
   wait();
   wait();
 #+END_SRC
@@ -1107,8 +1198,6 @@ Send world.
 #+BEGIN_SRC c
 } 
 #+END_SRC
-
-
 
 End main function.
 

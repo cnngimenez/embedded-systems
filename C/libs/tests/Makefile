@@ -11,7 +11,7 @@ endif
 MMCU=atmega328p
 
 # Optimizations (For debugging with simavr you should deactivate this)
-OPT=-Os
+# OPT=-Os
 
 # Include this C headers
 INCLUDES=-I/usr/avr/include/avr

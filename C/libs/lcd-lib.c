@@ -222,9 +222,18 @@ send_entry_modeset();
 
 } // lcd_init
 
-void lcd_send_char(char c){
+void lcd_ddram_addr(uint8_t addr){
+  lcd_send_command(0, 0b10000000 | addr);
+  wait_bf();
+}
+
+void lcd_send_char(char c, uint8_t addr){
 
 wait_bf();
+
+if (addr < 80){
+  lcd_ddram_addr(addr);
+}
 
 rs_on();
 
@@ -271,16 +280,15 @@ void lcd_return_home(){
   wait_bf();
 }
 
-void lcd_ddram_addr(uint8_t addr){
-  lcd_send_command(0, 0b10000000 | addr);
-  wait_bf();
+void lcd_send_string(char *s, unsigned int delay, uint8_t addr){
+
+if (addr < 80){
+  lcd_ddram_addr(addr);
 }
 
-void lcd_send_string(char *s, unsigned int delay){
-
-unsigned int i = 0;
+uint8_t i = 0;
 while (s[i] != '\0'){
-  lcd_send_char(s[i]);
+  lcd_send_char(s[i], 255);
   if (delay > 0){
     wait_ms(delay);
   }
@@ -322,4 +330,24 @@ void lcd_cursor_right(unsigned int amount, unsigned int delay){
         wait_ms(delay);
       }
     } 
+}
+
+void cgram_addr(uint8_t addr){
+  if (addr <= 0x3f){
+    lcd_send_command(0, 0b01000000 | addr);
+  }
+}
+
+void lcd_set_cgram(uint8_t num, uint8_t pattern[8]){
+
+cgram_addr(num*0x08);
+
+for (uint8_t i = 0; i < 8; i++){
+  lcd_send_command(1, pattern[i]);
+}
+
+} // lcd_set_cgram
+
+void lcd_print_cgram(uint8_t num, uint8_t ddram_addr){
+  lcd_send_char(num, ddram_addr);
 }
