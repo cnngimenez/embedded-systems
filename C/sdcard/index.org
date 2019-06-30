@@ -1,0 +1,611 @@
+
+* Introduction
+** Pin Connections
+The SD card use Serial Peripheral Interface (SPI) protocol. The module must be connected to an Arduino UNO board according to the following table.
+
+|-----------+-------------+--------------------|
+| Board Pin | ATMega Port | SD card Module PIN |
+|-----------+-------------+--------------------|
+|        13 | PB5         | SCK                |
+|        12 | PB4         | MISO               |
+|        11 | PB3         | MOSI               |
+|        10 | PB2         | SS (also CS)       |
+|-----------+-------------+--------------------|
+
+** Port Directions
+When SPI is enabled, the direction of the pins is overriden according to master/slave configuration. The following table shows these pins and their directions.
+
+|--------+------------------+-----------------|
+| PIN    | Master Direction | Slave Direction |
+|--------+------------------+-----------------|
+| MOSI   | User Defined     | Input           |
+| MISO   | Input            | User Defined    |
+| SCK    | User Defined     | Input           |
+| Not SS | User Defined     | Input           |
+|--------+------------------+-----------------|
+
+The SPI protocol use the following registers:
+
+|----------------------+------------+-------------|
+| Register full name   | Short name | Address     |
+|----------------------+------------+-------------|
+| SPI Control Register | SPCR       | 0x2c (0x4c) |
+| SPI Status Register  | SPSR       | 0x2D (0x4D) |
+| SPI Data Register    | SPDR       | 0x2E (0x4E) |
+|----------------------+------------+-------------|
+
+For using the SD card, the Arduino SPI controller must be setted as master. 
+
+The guide posted at www.dejazzer.com/ee379/lecture_notes/lec12_sd_card.pdf by Cristinel Ababei is used as a reference for SPI modes and SD cards usage.
+
+** SD Card commands
+The SD card receives commands and send responses from it. Commands consists of 48 bits with the following format:
+
+| /     |  < |    |                |           |         | > |
+|-------+----+----+----------------+-----------+---------+---|
+| Bits  | 47 | 46 | 45 ... 40      | 39 ... 8  | 7 ... 1 | 0 |
+|-------+----+----+----------------+-----------+---------+---|
+| Value |  0 |  1 | Command Number | Arguments | CRC     | 1 |
+|-------+----+----+----------------+-----------+---------+---|
+
+For any transaction (i.e. sending or receiving information) the CS/SS bit must be low.
+
+A reference of all the commands are available at the "SD Specification Part 1 Physical Layer Simplified Specification" at the https://www.sdcard.org/ Web page. Ensure to refer to the SPI commands and not others in the specification.
+
+** Response format
+
+*** R1
+|------+----------------------|
+| Bits | Description          |
+|------+----------------------|
+|    7 | Value 0              |
+|    6 | parameter error      |
+|    5 | address error        |
+|    4 | erase sequence error |
+|    3 | com crc error        |
+|    2 | illegal command      |
+|    1 | erase reset          |
+|    0 | Idle state           |
+|------+----------------------|
+
+- In idle state :: The card is in idle state and running the initialization process.
+- Erase Reset :: An erase sequence was cleared.
+- Illegal command :: An illegal code has been detected.
+- Communication CRC error :: The CRC check of the last command failed.
+- Erase sequence error :: An error in the erase sequence commands ocurred.
+- Address Error :: A misaligned address that did not match the block length.
+- Parameter error :: The argument was outside the allowed range.
+
+*** R3
+
+|-------+--------------|
+|  Bits | Description  |
+|-------+--------------|
+| 39-32 | Same as R1   |
+|  31-0 | OCR register |
+|-------+--------------|
+
+** SD Card Registers
+The SD card has got some registers that can ve transmitted by some commands.
+
+The SPI comand CMD58 retrieve the Operation Condition Register (OCR). It is a 32 bits register which stores the V_{dd} voltage profile and other status bits.
+
+|-------+---------------------------------|
+|  Bits | Description                     |
+|-------+---------------------------------|
+|   0-6 | Reserved                        |
+|     7 | Reserved for low voltage range  |
+|-------+---------------------------------|
+|  8-14 | Reserved                        |
+|    15 | 2.7-2.8                         |
+|-------+---------------------------------|
+|    16 | 2.8-2.9                         |
+|    17 | 2.9-3.0                         |
+|    18 | 3.0-3.1                         |
+|    19 | 3.1-3.2                         |
+|    20 | 3.2-3.3                         |
+|    21 | 3.3-3.4                         |
+|    22 | 3.4-3.5                         |
+|    23 | 3.5-3.6                         |
+|-------+---------------------------------|
+|    24 | Switching to 1.8V accepted      |
+| 25-28 | Reserved                        |
+|    29 | UHS-II Card Status              |
+|    30 | Card Capacity Status (CSS)      |
+|    31 | Card power up status bit (busy) |
+|-------+---------------------------------|
+
+VDD Voltage window is between bits 0 and 23.
+
+The 7th bit is 0 for cards version 1.0. It is 1 for version 2.0 and can receive the CMD8 command. It indicates the Dual Voltage Card property.
+
+The 24th bit is supported by UHS-I cards.
+
+The 30th bit is valid when the card power up status bit is set. 1 indicates that the card is SDHC or SDXC, 0 indicates that the card is SDSC.
+
+The 31st bit is low when the power up routine is not ready.
+
+
+
+* SD card Driver Header
+:PROPERTIES:
+:header-args: :comments no :padline yes :tangle sdcard.h
+:END:
+
+** Begin header
+Avoid including this file twice.
+#+BEGIN_SRC c
+#ifndef _SDCARD_H
+#define _SDCARD_H 1
+#+END_SRC
+
+** Include other headers
+
+#+BEGIN_SRC c
+#include <stdint.h>
+#+END_SRC
+
+
+** Initialize
+Initialize the SPI for connecting with the SD card
+
+#+BEGIN_SRC c
+void sdcard_init();
+uint8_t* sdcard_last_cmd();
+void sdcard_send_command(uint8_t command, uint32_t arguments);
+void sdcard_send_command_raw(uint8_t cmd[6]);
+uint8_t sdcard_receive();
+#+END_SRC
+
+
+** End Header
+#+BEGIN_SRC c
+#endif // _SDCARD_H
+#+END_SRC
+
+* SD card Driver Body
+:PROPERTIES:
+:header-args: :comments no :padline yes :tangle sdcard.c
+:END:
+
+** Headers needed
+Include the sdcard header.
+
+#+BEGIN_SRC c
+#include "sdcard.h"
+#+END_SRC
+
+
+Include the AVR IO header for using the port and register names.
+
+#+BEGIN_SRC c
+#include <avr/io.h>
+#+END_SRC
+
+Include the standard integer types. This adds the ~uint8_t~ type (unsigned eight bits type).
+
+#+BEGIN_SRC c
+#include <stdint.h>
+#+END_SRC
+
+
+** Structure
+This maps a readable structure into the register memory.
+
+#+BEGIN_SRC c
+typedef struct {
+  uint8_t spcr; // 0x4C
+  uint8_t spsr; // 0x4D
+  uint8_t spdr; // 0x4E
+} volatile spi_t;
+#+END_SRC
+
+Map the structure into the start of the SPI registers.
+
+#+BEGIN_SRC c
+volatile spi_t *spi = (spi_t*) (0x4c);
+#+END_SRC
+
+*** Pins
+Port B input/outputs (5, 4, 3 and 2) are needed.
+
+#+BEGIN_SRC c
+volatile uint8_t* portb = (uint8_t*) (0x25);
+volatile uint8_t* ddrb = (uint8_t*) (0x24);
+volatile uint8_t* pinb = (uint8_t*) (0x23);
+#+END_SRC
+
+** Variables
+*** Last command
+This variable will hold the last command sended.
+
+#+BEGIN_SRC c
+uint8_t last_cmd[6] = {0,0,0,0,0,0};
+#+END_SRC
+
+** Set MOSI, and CS
+The following functions set the MOSI and CS to the desired value.
+
+#+BEGIN_SRC c
+void mosi_on(){
+  *portb |= (1<<PB3);
+} // mosi_on
+void cs_on(){
+  *portb |= (1<<PB2);
+} // cs_on
+
+void mosi_off(){
+  *portb &= 0b11110111; 
+} // mosi_off
+void cs_off(){
+  *portb &= 0b11111011;
+} // cs_off
+#+END_SRC
+
+** Calculate CRC
+Most commands need a CRC7 bits. The following code is retrieved from https://stackoverflow.com/questions/49672644/cant-figure-out-how-to-calculate-crc7
+
+#+BEGIN_SRC c
+unsigned char CRC7(const unsigned char message[], const unsigned int length) {
+  const unsigned char poly = 0b10001001;
+  unsigned char crc = 0;
+  for (unsigned i = 0; i < length; i++) {
+     crc ^= message[i];
+     for (int j = 0; j < 8; j++) {
+      // crc = crc & 0x1 ? (crc >> 1) ^ poly : crc >> 1;       
+      crc = (crc & 0x80u) ? ((crc << 1) ^ (poly << 1)) : (crc << 1);
+    }
+  }
+  //return crc;
+  return crc >> 1;
+}
+#+END_SRC
+
+** Send Data through SPI
+Send a byte through SPI and wait until it is transmitted.
+
+"Wait until the transmission is complete" means until the SPSR register has the SPIF bit in 1.
+
+#+BEGIN_SRC c
+void send_byte(uint8_t byte){
+  spi->spdr = byte;
+  while (! (spi->spsr & (1<<SPIF)));
+} // send_byte
+#+END_SRC
+
+** Send Command Raw Function
+This function sends a command to the SD card. Each command has 48 bits (6 bytes). However, the SPI controller at ATmega has a data register of 8 bits which means it has to be setted 6 times to send all the command.
+
+#+BEGIN_SRC c
+void sdcard_send_command_raw(uint8_t command[6]){
+  uint8_t i;
+#+END_SRC
+
+Save the command to the ~last_cmd~ variable.
+
+#+BEGIN_SRC c
+for (i = 0; i < 6; i++){
+  last_cmd[i] = command[i];
+}
+#+END_SRC
+
+The CS must be at 0. 
+
+#+BEGIN_SRC c
+  cs_off();
+#+END_SRC
+
+Wait until the device is not busy. If for some reason the device is sending data, it will not be 0xFF. When the device is idle it will set MISO in 1 when seting MOSI in 1.
+
+#+BEGIN_SRC c
+send_byte(0xff);
+while (spi->spdr != 0xff){
+  send_byte(0xff);
+}
+#+END_SRC
+
+Send all the bytes. Remember that ~send_byte()~ will set the SPDR with data and wait until all of the bits were transmitted.
+
+#+BEGIN_SRC c
+  for (i = 0; i < 6; i++){
+    send_byte(command[i]);
+  } // for
+#+END_SRC
+
+End the function.
+
+#+BEGIN_SRC c
+} // sdcard_send_command_raw
+#+END_SRC
+
+** Send Command Function
+This is a simplified version of the ~sdcard_send_command_raw~ function.
+
+Considering that the command number has 6 bits, an 8 bits parameter can be used. The arguments can have 32 bits available.
+
+#+BEGIN_SRC c
+void sdcard_send_command(uint8_t command, uint32_t argument){
+#+END_SRC
+
+#+BEGIN_SRC c
+uint8_t cmd[6] = {0, 0, 0, 0, 0, 0};
+#+END_SRC
+
+The first bits are always ~0b01~. The last bit too. Also, set the command argument.
+
+#+BEGIN_SRC c
+cmd[0] = 0b01000000 | (0b00111111 & command);
+#+END_SRC
+
+Set the arguments.
+
+#+BEGIN_SRC c
+cmd[1] = (argument>>24);
+cmd[2] = 0b11111111 & (argument>>16);
+cmd[3] = 0b11111111 & (argument>>8);
+cmd[4] = 0b11111111 & argument;
+#+END_SRC
+
+Calculate the CRC7. The last bit is always 1.
+
+#+BEGIN_SRC c
+cmd[5] = CRC7(cmd, 5);
+cmd[5] = (cmd[5]<<1) | 0b00000001;
+#+END_SRC
+
+Send the command.
+
+#+BEGIN_SRC c
+sdcard_send_command_raw(cmd);
+#+END_SRC
+
+
+#+BEGIN_SRC c
+} // sdcard_send_command
+#+END_SRC
+
+** Receive Response
+This function receive a response from the SD card.
+
+#+BEGIN_SRC c
+uint8_t sdcard_receive(){
+#+END_SRC
+
+First, set MOSI high and CS low.
+
+#+BEGIN_SRC c
+cs_off();
+spi->spdr = 0xff;
+#+END_SRC
+
+Now wait for the answer. The SPIF bit at the SPSR register is 1 when transfer is complete.
+
+#+BEGIN_SRC c
+ while (! (spi->spsr & (1<<SPIF)));
+#+END_SRC
+
+Read the data and return it.
+
+#+BEGIN_SRC c
+uint8_t data = spi->spdr;
+
+cs_on();
+return data;
+#+END_SRC
+
+
+#+BEGIN_SRC c
+} // sdcard_receive
+#+END_SRC
+
+
+** Initialization Function
+The SPI initialization is as follows.
+
+#+BEGIN_SRC c
+void sdcard_init(){
+#+END_SRC
+
+*** Pin Modes
+
+First, set the pin modes as in the master SPI configuration. The MISO pin (12 board pin or PB4) will be overriden to input mode. MOSI, SCK and SS (11, 13 and 10 board pins) will be set as output.
+
+#+BEGIN_SRC c
+*ddrb |= (1<<PB5) | (1<<PB3) | (1<<PB2);
+#+END_SRC
+
+*** SPCR - SPI Control Register
+Second, set the SPI Control Register. It has the following format.
+
+|------+-----+------+------+------+------+------+------|
+|    7 |   6 |    5 |    4 |    3 |    2 |    1 |    0 |
+|------+-----+------+------+------+------+------+------|
+| SPIE | SPE | DORD | MSTR | CPOL | CPHA | SPR1 | SPR0 |
+|------+-----+------+------+------+------+------+------|
+
+All bits starts as zero and are readable and writable.
+
+- SPIE :: Interruption Enable.
+- SPE :: SPI Enable.
+- DORD :: 0/LSB or 1/MSB send first.
+- MSTR :: 1/Master or slave mode.
+- CPOL :: Clock polarity mode. SCK is 0/high or 1/low for marking an idle state.
+- CPHA :: Clock phase mode. SCK marks sample or setup function depending on the edge.
+- SPR1-0 :: Select the prescaler according to the F_{osc}. Also, see SPI2X bit at the SPSR register.
+
+The CPOL and CPHA has the following modes.
+
+|----------+------+------+-----------------+-----------------|
+| SPI Mode | CPOL | CPHA | Leading Edge    | Trailing Edge   |
+|----------+------+------+-----------------+-----------------|
+|        0 |    0 |    0 | Sample(Rising)  | Setup(Falling)  |
+|        1 |    0 |    1 | Setup(Rising)   | Sample(Falling) |
+|        2 |    1 |    0 | Sample(Falling) | Setup(Rising)   |
+|        3 |    1 |    1 | Setup(Falling)  | Sample(Falling) |
+|----------+------+------+-----------------+-----------------|
+
+For the SD card the following is needed:
+
+- No interruptions (SPIE = 0). Polling will be used.
+- SPI Enabled (SPE = 1).
+- MSB is the first to send (DORD = 0).
+- Master mode (MSTR = 1).
+- Clock polarity marks a rising when a leading edge appears (CPOL=0).
+- Clock phase marks a sample when a leading edge appears (CPHA=0).
+- Prescaler must be between 100 and 400Khz
+
+According to Critinel Ababai, the SD card requires a SCK with a frequency between 100 and 400KHz. The F_{osc} in Arduino UNO is 16Mhz = 16000Khz = 16000000Hz. Then,  minimum prescaler is $\frac{16000Khz}{100Khz} = 160$ and the maximum is $\frac{16000KHz}{400KHz} = 40$. The available prescalers are 64 and 128, which the 64 prescaler is the selected one. The SPI2X, SPR1 and SPR0  must be setted to ~0b010~ respectively.
+
+|------+-----+------+------+------+------+------+------|
+| SPIE | SPE | DORD | MSTR | CPOL | CPHA | SPR1 | SPR0 |
+|------+-----+------+------+------+------+------+------|
+|    0 |   1 |    0 |    1 |    0 |    0 |    1 |    0 |
+|------+-----+------+------+------+------+------+------|
+
+#+BEGIN_SRC c
+spi->spcr = 0b01010010;
+#+END_SRC
+
+*** SPSR - SPI Status Register
+The SPSR register has the following format.
+
+|------+------+-----+-------|
+| 7    | 6    | 5-1 |     0 |
+| SPIF | WCOL | -   | SPI2X |
+|------+------+-----+-------|
+| R    | R    | R   | RW    |
+|------+------+-----+-------|
+
+- SPIF :: SPI Interrupt flag. Is set to 1 when a serial transfer is complete. This bit is cleared when the interruption handler is executed or when reading the SPSR and then accessing the SPDR register.
+- WCOL :: Write COLisions flag. IS set to 1 when the SPDR is written during a data transfer. Is cleared when reading SPSR and then the SPDR register.
+- SPI2X :: Double SPI Speed Bit. For prescaler use.
+
+The prescaler needs the SPI2X bit setted to the corresponding value.
+
+#+BEGIN_SRC c
+spi->spsr &= 0b11111110 | (0<<SPI2X);
+#+END_SRC
+
+*** SD card in SPI mode
+Set MOSI and CS lines to 1. Wait for more than 74 SCK cycles.
+
+#+BEGIN_SRC c
+cs_on();
+for (int i =0; i < 10; i++){
+  send_byte(0xff);
+}
+#+END_SRC
+
+Send a SPI mode command CMD0 and ignore the response. 
+
+#+BEGIN_SRC c :tangle off
+sdcard_send_command(0,0);
+sdcard_receive();
+#+END_SRC
+
+*** End
+
+End the sdcard initialization.
+
+#+BEGIN_SRC c
+} // sdcard_init
+#+END_SRC
+
+
+** Return the last command executed
+#+BEGIN_SRC c
+uint8_t* sdcard_last_cmd(){
+  return last_cmd;
+}
+#+END_SRC
+
+* Main file
+:PROPERTIES:
+:header-args: :comments no :padline yes :tangle read.c
+:END:
+
+** Include USART
+The USART library will be used to report to the user what the SD card answers.
+
+#+BEGIN_SRC c
+#include "../libs/usart-lib.h"
+#+END_SRC
+
+Include the SD card lib.
+
+#+BEGIN_SRC c
+#include "sdcard.h"
+#+END_SRC
+
+** Start Main function
+#+BEGIN_SRC c
+void main(){
+#+END_SRC
+
+** Initialize libraries
+#+BEGIN_SRC c
+serial_init();
+serial_send_string("Serial initialized\n\r");
+sdcard_init();
+serial_send_string("SD card initialized\n\r");
+#+END_SRC
+
+** Send a status command
+Set the CS to 0 and send CMD0 to the SD card. The CMD0 command is:
+
+: 01 000000 00000000 00000000 00000000 00000000 1001010 1
+
+#+BEGIN_SRC c
+  sdcard_send_command(0, 0);
+  uint8_t resp = sdcard_receive();
+  serial_put_char(resp);
+#+END_SRC
+
+The SD card will send the response: 8 bits that must be 0b00000001.
+
+** End Main
+
+#+BEGIN_SRC c
+} // main
+#+END_SRC
+
+
+
+* Meta     :noexport:
+
+  # ----------------------------------------------------------------------
+  #+TITLE:  SD Card Test
+  #+AUTHOR: Christian Gimenez
+  #+DATE:   29 jun 2019
+  #+EMAIL:
+  #+DESCRIPTION: 
+  #+KEYWORDS: 
+
+  #+STARTUP: inlineimages hidestars content hideblocks entitiespretty indent fninline latexpreview
+  #+TODO: TODO(t!) CURRENT(c!) PAUSED(p!) | DONE(d!) CANCELED(C!@)
+  #+OPTIONS:   H:3 num:t toc:t \n:nil @:t ::t |:t ^:{} -:t f:t *:t <:t
+  #+OPTIONS:   TeX:t LaTeX:t skip:nil d:nil todo:t pri:nil tags:not-in-toc tex:imagemagick
+  #+LINK_UP:   
+  #+LINK_HOME: 
+  #+XSLT:
+
+  # -- HTML Export
+  #+INFOJS_OPT: view:info toc:t ftoc:t ltoc:t mouse:underline buttons:t path:libs/org-info.js
+  #+EXPORT_SELECT_TAGS: export
+  #+EXPORT_EXCLUDE_TAGS: noexport
+  #+HTML_LINK_UP: ../../index.html
+  #+HTML_LINK_HOME: ../../index.html
+
+  # -- For ox-twbs or HTML Export
+  #+HTML_HEAD: <link href="../../libs/bootstrap.min.css" rel="stylesheet">
+  #+HTML_HEAD: <script src="../../libs/jquery.min.js"></script> 
+  #+HTML_HEAD: <script src="../../libs/bootstrap.min.js"></script>
+  #+LANGUAGE: en
+
+  # Local Variables:
+  # org-hide-emphasis-markers: t
+  # org-use-sub-superscripts: "{}"
+  # fill-column: 80
+  # visual-line-fringe-indicators: t
+  # ispell-local-dictionary: "british"
+  # End:
