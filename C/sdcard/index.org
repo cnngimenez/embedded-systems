@@ -1,5 +1,9 @@
 
 * Introduction
+The SD card has got a simple command processor. The communication between the Arduino and the SD card is through the Serial Peripheral Interface (SPI) protocol. 
+
+In this section, an introductory information is presented for proper understanding of the driver implementation.
+
 ** Pin Connections
 The SD card use Serial Peripheral Interface (SPI) protocol. The module must be connected to an Arduino UNO board according to the following table.
 
@@ -52,8 +56,26 @@ For any transaction (i.e. sending or receiving information) the CS/SS bit must b
 
 A reference of all the commands are available at the "SD Specification Part 1 Physical Layer Simplified Specification" at the https://www.sdcard.org/ Web page. Ensure to refer to the SPI commands and not others in the specification.
 
-** Response format
+*** Example
+A command example is the CMD0 for reseting the SD card. The SPI must send the command by sending each byte at a time. First, it must rise the MOSI to high and the CS to low. Second, after each clock edge, send bit by bit. Third, rise the MOSI and read the values of MISO ignoring the bits that starts with 1 at each edge clock.
 
+The numbers of the CMD0 are the following:
+
+: 01 000000 00000000 00000000 00000000 00000000 1001010 1
+
+In hexadecimal: 
+
+: 0x40 00 00 00 00 95
+
+The card may answer a sequence of high bits and then the success with following bits.
+
+: 11111111 11111111 00000001 11111111 ...
+: 0xFF FF 01 FF ..
+
+A sequence of 0xFF means that the card is busy or waiting for commands. All answer formats start with 0 at its 7th bits and end with 1 to detect when they begin and end.
+
+** Response format
+The commands can answer in the following formats.
 *** R1
 |------+----------------------|
 | Bits | Description          |
@@ -75,7 +97,9 @@ A reference of all the commands are available at the "SD Specification Part 1 Ph
 - Erase sequence error :: An error in the erase sequence commands ocurred.
 - Address Error :: A misaligned address that did not match the block length.
 - Parameter error :: The argument was outside the allowed range.
-
+**** R1b
+*** R2
+*** R4 and R5
 *** R3
 
 |-------+--------------|
@@ -85,9 +109,22 @@ A reference of all the commands are available at the "SD Specification Part 1 Ph
 |  31-0 | OCR register |
 |-------+--------------|
 
+*** R7
+
+|-------+------------------|
+|  Bits | Description      |
+|-------+------------------|
+| 39-32 | Same as R1       |
+| 31-28 | Command version  |
+| 27-12 | Reserved         |
+|  11-8 | Voltage accepted |
+|   7-0 | Echo back        |
+|-------+------------------|
+
 ** SD Card Registers
 The SD card has got some registers that can ve transmitted by some commands.
 
+*** Operation Condition Register - OCR
 The SPI comand CMD58 retrieve the Operation Condition Register (OCR). It is a 32 bits register which stores the V_{dd} voltage profile and other status bits.
 
 |-------+---------------------------------|
@@ -146,7 +183,7 @@ Avoid including this file twice.
 #+END_SRC
 
 
-** Initialize
+** Functions
 Initialize the SPI for connecting with the SD card
 
 #+BEGIN_SRC c
@@ -400,7 +437,11 @@ return data;
 
 
 ** Initialization Function
-The SPI initialization is as follows.
+This functions initialize the SPI registers and the SD card. The SPI initialization is very straigh forward, but the SD card must follow a state diagram before asking for any block data.
+
+The following diagram present the procedure for initializing all types of SD cards. The image with a detailed explanation can be found at the following URL: http://elm-chan.org/docs/mmc/mmc_e.html#spiinit
+
+[[file:imgs/sdinit-small.png]]
 
 #+BEGIN_SRC c
 void sdcard_init(){
@@ -496,14 +537,54 @@ for (int i =0; i < 10; i++){
 }
 #+END_SRC
 
-Send a SPI mode command CMD0 and ignore the response. 
+*** CMD0 First command
+CMD0 resets the SD card for setting it in idle state.
 
-#+BEGIN_SRC c :tangle off
-sdcard_send_command(0,0);
-sdcard_receive();
+Send a SPI mode command CMD0 until receiving a proper R1 response (0x01). Remember that all R1 responses starts with the 7th bit at 0. This means that if this bit is 1 it must read again (or if resp is 0xff which means that the card is busy).
+
+#+BEGIN_SRC c 
+uint8_t resp = 0;
+while (resp != 0x01){
+  sdcard_send_command(0,0);
+  resp = sdcard_receive();
+  while (resp & 0x80){
+    resp = sdcard_receive();
+  }
+}
 #+END_SRC
 
+*** Try CMD8 for 2.0 cards
+CMD8 asks about status condition and if the card can operate at the provided voltage. It is supported for 2.0 cards, but 1.0 ones will answer the R1 response as an illegal command. 
+
+The paramaters bits 11-8 indicates the supplied voltage (VHS). The 7-0 bits of the parameter is a pattern that will be echoed at the R7 response. See section [[*R7][R7]] for description about the bits format.
+
+Fortunatelly, the Arduino's SD card module provide the SD card with the proper voltage. Although, the command has to be sended for changing the SD card state.
+
+#+BEGIN_SRC c
+sdcard_send_command(8, 0x1AA);
+do {
+  resp = sdcard_receive();
+} while (resp == 0xff);
+#+END_SRC
+
+*** Send CMD58 command
+Send this command to read the CCS bit in OCR register. Se section [[*Operation Condition Register - OCR][Operation Condition Register - OCR]] for more information.
+
+The CMD58 response has got an R3 format. See section [[*R3][R3]] for the bits description. 
+
+#+BEGIN_SRC c
+sdcard_send_command(58, 0);
+do {
+  resp = sdcard_receive();
+} while (resp == 0xff); 
+#+END_SRC
+
+
+*** Send CMD16 command
+Try to force 512 bytes of block size. This is useful for working with FAT file systems.
+
 *** End
+Now the SPI and the SD card is ready. Any command can be requested.
 
 End the sdcard initialization.
 
