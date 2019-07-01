@@ -458,8 +458,8 @@ End the main function.
   #+INFOJS_OPT: view:info toc:t ftoc:t ltoc:t mouse:underline buttons:t path:libs/org-info.js
   #+EXPORT_SELECT_TAGS: export
   #+EXPORT_EXCLUDE_TAGS: noexport
-  #+HTML_LINK_UP: index.html
-  #+HTML_LINK_HOME: index.html
+  #+HTML_LINK_UP: ../../index.html
+  #+HTML_LINK_HOME: ../../index.html
 
   # -- For ox-twbs or HTML Export
   #+HTML_HEAD: <link href="../../libs/bootstrap.min.css" rel="stylesheet">
