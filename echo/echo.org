@@ -41,10 +41,10 @@ The formula to calculate the UBRRn value to store in the register is the followi
 The UBRRn value for 9600bps and a 16MHz clock is $\frac{16000000}{16 \cdot 9600} - 1 = 103.166666667$. According to the table at the Atmel 328 datasheet, UBRRn must be 103 for 16.0000MHz.
 
 #+BEGIN_SRC asm
-ldi r16, 0
-ldi r17, 103
-sts UBRR0H, r16
-sts UBRR0L, r17
+          ldi r16, 0
+          ldi r17, 103
+          sts UBRR0H, r16
+          sts UBRR0L, r17
 #+END_SRC
 
 ** USART Control and Status Register

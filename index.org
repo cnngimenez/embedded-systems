@@ -7,6 +7,7 @@ Examples made for the Arduino board.
   - [[file:C/libs/lcd.org][LCD library]]
 - [[file:C/echo/index.org][Serial Echo Example]] (UART example)
 - [[file:C/servo/index.org][Servo Motor Example]] (PWM example)
+- [[file:C/sdcard/index.org][SD card Example]] (SPI example)
 
 * Assembler
 
