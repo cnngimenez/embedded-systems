@@ -117,6 +117,8 @@ serial->status_control_c |= (1<<UCPOL0);
 | (1<<UCSZ01) | (1<<UCSZ00);
 */
 
+#ifdef USART1
+
 serial1->baud_rate_h = (unsigned char) (USART1_BRR_VALUE>>8);
 serial1->baud_rate_l = (unsigned char) USART1_BRR_VALUE;
 
@@ -176,6 +178,10 @@ serial1->status_control_c |= (1<<USART1_UCSZ00);
 #ifdef USART1_POLARITY_TX_FALLING
 serial1->status_control_c |= (1<<USART1_UCPOL0);
 #endif
+
+#endif // USART_1
+
+#ifdef USART_2
 
 serial2->baud_rate_h = (unsigned char) (USART2_BRR_VALUE>>8);
 serial2->baud_rate_l = (unsigned char) USART2_BRR_VALUE;
@@ -237,6 +243,10 @@ serial2->status_control_c |= (1<<USART2_UCSZ00);
 serial2->status_control_c |= (1<<USART2_UCPOL0);
 #endif
 
+#endif // USART_2
+
+#ifdef USART_3
+
 serial3->baud_rate_h = (unsigned char) (USART3_BRR_VALUE>>8);
 serial3->baud_rate_l = (unsigned char) USART3_BRR_VALUE;
 
@@ -297,23 +307,33 @@ serial3->status_control_c |= (1<<USART3_UCSZ00);
 serial3->status_control_c |= (1<<USART3_UCPOL0);
 #endif
 
+#endif // USART_3
+
 }
 
-char serial_get_char(){
+char _serial_get_char(uart_t *p_serial){
 
-while (! (serial->status_control_a & (1<<RXC0)));
+while (! (p_serial->status_control_a & (1<<RXC0)));
 
-char c = serial->data;
+char c = p_serial->data;
 return c;
+
+} // _serial_get_char
+
+void _serial_put_char(uart_t *p_serial, char c){
+
+while (! (p_serial->status_control_a & (1<<UDRE0)));
+
+p_serial->data = c;
 
 }
 
 void serial_put_char(char c){
+  _serial_put_char(serial, c);
+}
 
-while (! (serial->status_control_a & (1<<UDRE0)));
-
-serial->data = c;
-
+char serial_get_char(){
+  return _serial_get_char(serial);
 }
 
 void serial_send_string(char *s){
@@ -368,3 +388,62 @@ for (i=i-1; i > j ; i--){
 serial_send_string(s);
 
 }
+
+void serial_send_hex(uint8_t number){
+
+char s[3] = "\0\0\0";
+uint8_t digit1 = (number>>4);
+if (digit1 < 10){
+  s[0] = digit1 + '0';
+}
+
+switch (digit1){
+  case 10:
+    s[0] = 'A';
+    break;
+  case 11:
+    s[0] = 'B';
+    break;
+  case 12:
+    s[0] = 'C';
+    break;
+  case 13:
+    s[0] = 'D';
+    break;
+  case 14:
+    s[0] = 'E';
+    break;
+  case 15:
+    s[0] = 'F';
+    break;
+}
+
+uint8_t digit2 = (number & 0b00001111);
+if (digit2 < 10){
+  s[1] = digit2 + '0';
+}
+
+switch (digit2){
+  case 10:
+    s[1] = 'A';
+    break;
+  case 11:
+    s[1] = 'B';
+    break;
+  case 12:
+    s[1] = 'C';
+    break;
+  case 13:
+    s[1] = 'D';
+    break;
+  case 14:
+    s[1] = 'E';
+    break;
+  case 15:
+    s[1] = 'F';
+    break;
+}
+
+serial_send_string(s);
+
+} // serial_send_hex

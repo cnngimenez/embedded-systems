@@ -60,7 +60,7 @@
 // #define USART_POLARITY_TX_FALLING 1
 
 /*
- Uncomment this for enabling USART 1 registers.
+ Uncomment this for enabling USART 1 registers and methods.
  Its mode is configure at the usart_1_config.h file.
 */
 // #define USART_1
@@ -70,7 +70,7 @@
 #endif
 
 /*
- Uncomment this for enabling USART 2 registers.
+ Uncomment this for enabling USART 2 registers and methods.
  Its mode is configure at the usart_2_config.h file.
 */
 // #define USART_2
@@ -80,7 +80,7 @@
 #endif
 
 /*
- Uncomment this for enabling USART 3 registers.
+ Uncomment this for enabling USART 3 registers and methods.
  Its mode is configure at the usart_3_config.h file.
 */
 // #define USART_3
@@ -102,6 +102,8 @@ int serial_get_integer();
 void serial_put_char(char c);
 
 void serial_send_string(char *s);
+
+void serial_send_hex(uint8_t number);
 
 void serial_send_integer(int number);
 

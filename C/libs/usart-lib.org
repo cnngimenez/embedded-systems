@@ -217,6 +217,13 @@ Send a string up to the "\0" character.
 void serial_send_string(char *s);
 #+END_SRC
 
+Send an Hexadecimal number.
+
+#+BEGIN_SRC c
+void serial_send_hex(uint8_t number);
+#+END_SRC
+
+
 Send an integer number. This converts the number into a string and sends it.
 
 #+BEGIN_SRC c
@@ -842,6 +849,11 @@ The register will be setted as shown in the following.
 **** USART 1
 Apply the configuration for this USARTn structure.
 
+#+BEGIN_SRC c
+#ifdef USART1
+#+END_SRC
+
+
 ***** UBBR
 
 #+BEGIN_SRC c
@@ -930,8 +942,18 @@ Finally, if the macro ~USART1_CHARACTER_SIZE_9~ is setted, change the UCSZ02 bit
   #endif
 #+END_SRC
 
+***** End USART 1 Configuration
+
+#+BEGIN_SRC c
+#endif // USART_1
+#+END_SRC
+
 **** USART 2
 Apply the configuration for this USARTn structure.
+
+#+BEGIN_SRC c
+#ifdef USART_2
+#+END_SRC
 
 ***** UBBR
 
@@ -1021,8 +1043,17 @@ Finally, if the macro ~USART2_CHARACTER_SIZE_9~ is setted, change the UCSZ02 bit
   #endif
 #+END_SRC
 
+***** End USART 2 Configuration
+#+BEGIN_SRC c
+#endif // USART_2
+#+END_SRC
+
 **** USART 3
 Apply the configuration for this USARTn structure.
+
+#+BEGIN_SRC c
+#ifdef USART_3
+#+END_SRC
 
 ***** UBBR
 
@@ -1112,6 +1143,11 @@ Finally, if the macro ~USART3_CHARACTER_SIZE_9~ is setted, change the UCSZ02 bit
   #endif
 #+END_SRC
 
+***** End USART 3 Configuration
+#+BEGIN_SRC c
+#endif // USART_3
+#+END_SRC
+
 **** End init
 
 #+BEGIN_SRC c
@@ -1123,7 +1159,7 @@ Finally, if the macro ~USART3_CHARACTER_SIZE_9~ is setted, change the UCSZ02 bit
 Receive a character using the provided serial pointer. This can be used by USART0, USART1 or the others.
 
 #+BEGIN_SRC c
-char _serial_get_char(uint8_t *p_serial){
+char _serial_get_char(uart_t *p_serial){
 #+END_SRC
 
 Wait until the value received is ready.
@@ -1143,27 +1179,36 @@ return c;
 } // _serial_get_char
 #+END_SRC
 
-*** Put Char
+*** Put Char Internal Method
+Send a character using the provided serial pointer. This can be used by all USARTn configurations.
 
 #+BEGIN_SRC c
-void serial_put_char(char c){
+void _serial_put_char(uart_t *p_serial, char c){
 #+END_SRC
 
 The data register must be empty, wait for it.
 
 #+BEGIN_SRC c
-while (! (serial->status_control_a & (1<<UDRE0)));
+while (! (p_serial->status_control_a & (1<<UDRE0)));
 #+END_SRC
 
 Tell the UART to send the character! Store it at the UDR0.
 
 #+BEGIN_SRC c
-serial->data = c;
+p_serial->data = c;
 #+END_SRC
 
 Return.
 
 #+BEGIN_SRC c
+}
+#+END_SRC
+
+*** Put Char
+
+#+BEGIN_SRC c
+void serial_put_char(char c){
+  _serial_put_char(serial, c);
 }
 #+END_SRC
 
@@ -1267,8 +1312,7 @@ Add the "\0" character.
 #+BEGIN_SRC c
 s[i] = '\0';
 #+END_SRC
-
-*** Invert the String
+**** Invert the String
 First ignore the sign if there are any. 
 
 #+BEGIN_SRC c
@@ -1298,6 +1342,88 @@ Now, send the string as usual.
 #+BEGIN_SRC c
 }
 #+END_SRC
+
+*** Send an hexadecimal number
+#+BEGIN_SRC c
+void serial_send_hex(uint8_t number){
+#+END_SRC
+
+Send the first digit. 
+
+#+BEGIN_SRC c
+char s[3] = "\0\0\0";
+uint8_t digit1 = (number>>4);
+if (digit1 < 10){
+  s[0] = digit1 + '0';
+}
+#+END_SRC
+
+If it is a number greater than 10 (0xA) then send the letter accordingly.
+
+#+BEGIN_SRC c
+switch (digit1){
+  case 10:
+    s[0] = 'A';
+    break;
+  case 11:
+    s[0] = 'B';
+    break;
+  case 12:
+    s[0] = 'C';
+    break;
+  case 13:
+    s[0] = 'D';
+    break;
+  case 14:
+    s[0] = 'E';
+    break;
+  case 15:
+    s[0] = 'F';
+    break;
+}
+#+END_SRC
+
+Same algorithm for the second digit.
+
+#+BEGIN_SRC c
+uint8_t digit2 = (number & 0b00001111);
+if (digit2 < 10){
+  s[1] = digit2 + '0';
+}
+
+switch (digit2){
+  case 10:
+    s[1] = 'A';
+    break;
+  case 11:
+    s[1] = 'B';
+    break;
+  case 12:
+    s[1] = 'C';
+    break;
+  case 13:
+    s[1] = 'D';
+    break;
+  case 14:
+    s[1] = 'E';
+    break;
+  case 15:
+    s[1] = 'F';
+    break;
+}
+#+END_SRC
+
+Send the string.
+
+#+BEGIN_SRC c
+serial_send_string(s);
+#+END_SRC
+
+
+#+BEGIN_SRC c
+} // serial_send_hex
+#+END_SRC
+
 
 * Test Send
   :PROPERTIES:
@@ -1408,8 +1534,8 @@ Ensure that 9600 8N1 is enabled. 8N1 means:
   #+INFOJS_OPT: view:info toc:t ftoc:t ltoc:t mouse:underline buttons:t path:libs/org-info.js
   #+EXPORT_SELECT_TAGS: export
   #+EXPORT_EXCLUDE_TAGS: noexport
-  #+HTML_LINK_UP: index.html
-  #+HTML_LINK_HOME: index.html
+  #+HTML_LINK_UP: ../../index.html
+  #+HTML_LINK_HOME: ../../index.html
 
   # -- For ox-twbs or HTML Export
   #+HTML_HEAD: <link href="../../libs/bootstrap.min.css" rel="stylesheet">
