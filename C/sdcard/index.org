@@ -110,14 +110,17 @@ The commands can answer in the following formats.
 |-------+--------------|
 
 *** R7
+Is a 40 bits (5 bytes) response.
 
 |-------+------------------|
 |  Bits | Description      |
 |-------+------------------|
 | 39-32 | Same as R1       |
+|-------+------------------|
 | 31-28 | Command version  |
 | 27-12 | Reserved         |
 |  11-8 | Voltage accepted |
+|-------+------------------|
 |   7-0 | Echo back        |
 |-------+------------------|
 
@@ -163,11 +166,36 @@ The 30th bit is valid when the card power up status bit is set. 1 indicates that
 The 31st bit is low when the power up routine is not ready.
 
 
-
 * SD card Driver Header
 :PROPERTIES:
 :header-args: :comments no :padline yes :tangle sdcard.h
 :END:
+
+** License
+This work is under the GPL v3 license. 
+
+#+BEGIN_SRC c
+/* 
+   Copyright 2019 Christian Gimenez
+   
+   Author: Christian Gimenez   
+
+   sdcard.h
+   
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation, either version 3 of the License, or
+   (at your option) any later version.
+   
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+   
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+#+END_SRC
 
 ** Begin header
 Avoid including this file twice.
@@ -182,18 +210,61 @@ Avoid including this file twice.
 #include <stdint.h>
 #+END_SRC
 
+** Constants and Macros
+
+*** Use Byte or Block Address
+These are used by the ~sdcard_use_address()~ function and ~use_address~ variable. This variable is setted on SD card initialization.
+
+~USE_ADDRESS_UNDEFINED~ is setted when v.1 cards is detected.
+
+See section [[*Use byte or block address][Use byte or block address]].
+
+#+BEGIN_SRC c
+#define USE_ADDRESS_UNDEFINED 0x00
+#define USE_BYTE_ADDRESS 0x01
+#define USE_BLOCK_ADDRESS 0x02
+#+END_SRC
+
+*** Initialization stop macros
+These macros defines literals for the ~stop_at_step~ initialization parameter.
+
+#+BEGIN_SRC c
+#define INIT_STOP_NONE 0
+#define INIT_STOP_SPI 1
+#define INIT_STOP_CMD0 2
+#define INIT_STOP_CMD8 3
+#+END_SRC
 
 ** Functions
 Initialize the SPI for connecting with the SD card
 
 #+BEGIN_SRC c
-void sdcard_init();
-uint8_t* sdcard_last_cmd();
+uint8_t sdcard_init(uint8_t stop_at_step);
+uint8_t sdcard_send_acmd(uint8_t acmd, uint32_t args);
 void sdcard_send_command(uint8_t command, uint32_t arguments);
 void sdcard_send_command_raw(uint8_t cmd[6]);
-uint8_t sdcard_receive();
 #+END_SRC
 
+Receive a byte of data from the SD card. If ~check_0xff~ is 1, then keep receiving data until no 0xff is received. This parameter is useful for ignoring idle high values at the first data after a command is issued. 
+
+If ~check_0xff~ is 1 and the return value is 0xff it means that the timeout has been reached.
+
+#+BEGIN_SRC c
+uint8_t sdcard_receive(uint8_t check_0xff);
+#+END_SRC
+
+** Get information
+Return the last command sent.
+
+#+BEGIN_SRC c
+uint8_t* sdcard_last_cmd();
+#+END_SRC
+
+Return if the SD card use byte or block addresses. One of the numbers described at section [[*Use Byte or Block Address][Use Byte or Block Address]] is returned.
+
+#+BEGIN_SRC c
+uint8_t sdcard_use_address();
+#+END_SRC
 
 ** End Header
 #+BEGIN_SRC c
@@ -204,6 +275,32 @@ uint8_t sdcard_receive();
 :PROPERTIES:
 :header-args: :comments no :padline yes :tangle sdcard.c
 :END:
+
+** License
+This work is under the GPL v3 license. 
+
+#+BEGIN_SRC c
+/* 
+   Copyright 2019 Christian Gimenez
+   
+   Author: Christian Gimenez   
+
+   sdcard.c
+   
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation, either version 3 of the License, or
+   (at your option) any later version.
+   
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+   
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+#+END_SRC
 
 ** Headers needed
 Include the sdcard header.
@@ -224,7 +321,6 @@ Include the standard integer types. This adds the ~uint8_t~ type (unsigned eight
 #+BEGIN_SRC c
 #include <stdint.h>
 #+END_SRC
-
 
 ** Structure
 This maps a readable structure into the register memory.
@@ -254,10 +350,20 @@ volatile uint8_t* pinb = (uint8_t*) (0x23);
 
 ** Variables
 *** Last command
-This variable will hold the last command sended.
+This variable will hold the last command sendt.
 
 #+BEGIN_SRC c
 uint8_t last_cmd[6] = {0,0,0,0,0,0};
+#+END_SRC
+*** Use byte or block address
+This value depends on the card version and type. If the card is SD Ver. 2 it can have a byte (SDSC) or block (SDHC/SDXC) address. 
+
+~USE_ADDRESS_UNDEFINED~ is used for v.1 cards.
+
+This is value is setted at SD card initialization. See section [[*SD version 2][SD version 2]].
+
+#+BEGIN_SRC c
+uint8_t use_address = USE_ADDRESS_UNDEFINED;
 #+END_SRC
 
 ** Set MOSI, and CS
@@ -401,11 +507,48 @@ sdcard_send_command_raw(cmd);
 } // sdcard_send_command
 #+END_SRC
 
+** Send ACMD command function
+For sending an Application specific Command (ACMD), it must be preceded by the CMD55 command.
+
+#+BEGIN_SRC c
+uint8_t sdcard_send_acmd(uint8_t acmd, uint32_t args){
+#+END_SRC
+
+First, send the CMD55 command.
+
+#+BEGIN_SRC c
+sdcard_send_command(55,0);
+#+END_SRC
+
+Receive the answer. The CMD55 uses the R1 answer format. If it is not 0x01, then return that something goes wrong.
+
+#+BEGIN_SRC c
+uint8_t resp = 0;
+do {
+  resp = sdcard_receive(0);
+} while (resp & 0x80);
+
+if (resp != 0x01) return 0;
+#+END_SRC
+
+Now send the ACMD command as it is a common CMDn command.
+
+#+BEGIN_SRC c
+sdcard_send_command(acmd, args);
+#+END_SRC
+
+End function.
+
+#+BEGIN_SRC c
+  return 1;
+} // sdcard_send_acmd
+#+END_SRC
+
 ** Receive Response
 This function receive a response from the SD card.
 
 #+BEGIN_SRC c
-uint8_t sdcard_receive(){
+uint8_t sdcard_receive(uint8_t check_0xff){
 #+END_SRC
 
 First, set MOSI high and CS low.
@@ -418,23 +561,166 @@ spi->spdr = 0xff;
 Now wait for the answer. The SPIF bit at the SPSR register is 1 when transfer is complete.
 
 #+BEGIN_SRC c
- while (! (spi->spsr & (1<<SPIF)));
+while (! (spi->spsr & (1<<SPIF)));
 #+END_SRC
 
-Read the data and return it.
+Read the data.
 
 #+BEGIN_SRC c
 uint8_t data = spi->spdr;
+#+END_SRC
 
+If ~check_0xff~ parameter is 1, then repeat the process until receiving a diferent data than 0xff.
+
+#+BEGIN_SRC c
+cs_on();
+if (check_0xff){
+  uint8_t timeout = 0;
+  while ((data == 0xff) && (timeout < 100)){
+
+    cs_off();
+    spi->spdr = 0xff;
+    while (! (spi->spsr & (1<<SPIF)));
+    data = spi->spdr;
+    cs_on();
+
+    timeout++;
+  }
+  // No need to check. It will return the data nevertheless.
+}
+#+END_SRC
+
+Activate the CS bit and return the data.
+
+#+BEGIN_SRC c
 cs_on();
 return data;
 #+END_SRC
-
 
 #+BEGIN_SRC c
 } // sdcard_receive
 #+END_SRC
 
+** Auxiliary functions for the initialization
+*** Send CMD58 command
+Send this command to read the CCS bit in OCR register. Se section [[*Operation Condition Register - OCR][Operation Condition Register - OCR]] for more information.
+
+The CMD58 response has got an R3 format. See section [[*R3][R3]] for the bits description. 
+
+The ~results~ value is an array of 5 bytes (~uint8_t~ types). It will be filled with the complete R3 response. 
+
+#+BEGIN_SRC c
+void send_cmd58(uint8_t results[5]){
+  sdcard_send_command(58, 0);
+
+  uint8_t resp;
+
+  resp = sdcard_receive(1);
+
+  results[0] = resp;
+  results[1] = sdcard_receive(0);
+  results[2] = sdcard_receive(0);
+  results[3] = sdcard_receive(0);
+  results[4] = sdcard_receive(0);
+} // send_cmd58
+#+END_SRC
+
+*** Get Capacity function for V.2 cards
+This function is used when a V.2 card is detected. After the CMD8 is answered by the card, an ACMD41 instruction must be sent in order to tell the card to initialize.
+
+This function returns the response of the ACMD41's R1 answer. In other words, 0x00 if success. 
+
+#+BEGIN_SRC c
+uint8_t get_v2_capacity(){
+
+  uint8_t resp, timeout;
+#+END_SRC
+
+Send the ACMD41 command while the R1 resp is 0x01. The 0x40000000 parameter (30th bit enabled) means that the host support SDHC or SDXC. This bit is called Host Capacity Support (HCS).
+
+#+BEGIN_SRC c
+  timeout = 0;
+  
+  do {
+    sdcard_send_acmd(41,0x40000000);
+    resp = sdcard_receive(1);
+    if (resp == 0xff) return 255;
+  
+    timeout++;
+  } while ((resp == 0x01) && (timeout < 100));
+  if (timeout == 100) return 255;
+#+END_SRC
+
+If the answer is an error (not 0x00), then the initialization has failed. Else, everything is all right. In other words, return ~resp~.
+
+#+BEGIN_SRC c
+  return resp;  
+#+END_SRC
+
+End the function.
+
+#+BEGIN_SRC c
+} // get_v2_capacity
+#+END_SRC
+
+*** Get Capacity function for V.1 cards
+Same as the section [[*Get Capacity function for V.2 cards][Get Capacity function for V.2 cards]], but use zero as parameter of the ACMD41.
+
+This function returns the response of the ACMD41's R1 answer. In other words, 0x00 if success. 
+
+#+BEGIN_SRC c
+uint8_t get_v1_capacity(){
+  uint8_t resp, timeout;
+  timeout = 0; 
+  
+  do {
+    sdcard_send_acmd(41,0x00000000);
+    resp = sdcard_receive(1);
+    if (resp == 0xff) return 255;
+  
+    timeout++;
+  } while ((resp == 0x01) && (timeout < 100));
+  if (timeout == 100) return 255;
+  
+  return resp;
+} // get_v1_capacity
+#+END_SRC
+
+
+The ACMD41 0x0 parameter disables the Host Capacity Support (HCS) at the 30th bit. This means that host supports neither SDHC nor SDXC cards.
+
+*** Get Capacity function for MMC V.3 cards
+For MMC cards, the CMD1 command must be sent. Is the same as ACMD41 but is available for Thin (1.4mm) standard size SD memory card.
+
+This function returns the response of the CMD1's R1 answer. In other words, 0x00 if success. 
+
+#+BEGIN_SRC c
+uint8_t get_mmc_capacity(){
+#+END_SRC
+
+Send the CMD1 without HCS support. If the answer is 0x01 repeat the command.
+
+#+BEGIN_SRC c
+  uint8_t resp, timeout, timeout2;
+  timeout = 0; timeout2 = 0;
+
+  do {
+    sdcard_send_command(1,0x00000000);
+    resp = sdcard_receive(1);
+    if (resp == 0xff) return 255;
+  
+    timeout++;
+  } while ((resp == 0x01) && (timeout < 100));
+  if (timeout == 100) return 255;
+
+  return resp;
+#+END_SRC
+
+End the function.
+
+#+BEGIN_SRC c
+  } // get_mmc_capacity
+#+END_SRC
 
 ** Initialization Function
 This functions initialize the SPI registers and the SD card. The SPI initialization is very straigh forward, but the SD card must follow a state diagram before asking for any block data.
@@ -444,7 +730,13 @@ The following diagram present the procedure for initializing all types of SD car
 [[file:imgs/sdinit-small.png]]
 
 #+BEGIN_SRC c
-void sdcard_init(){
+uint8_t sdcard_init(uint8_t stop_at_step){
+#+END_SRC
+
+The ~counts~ is a counter in case that a command has been executed many times. In this case, a timeout is considered and an error returned. The amount of times to consider a timeout is determined according to the situation.
+
+#+BEGIN_SRC c
+uint8_t count = 0;
 #+END_SRC
 
 *** Pin Modes
@@ -537,6 +829,12 @@ for (int i =0; i < 10; i++){
 }
 #+END_SRC
 
+This is the last command for setting up the SPI mode for the SD card. If ~stop_at_step~ is setted accordingly, then stop here.
+
+#+BEGIN_SRC c
+if (stop_at_step == INIT_STOP_SPI) return 1;
+#+END_SRC
+
 *** CMD0 First command
 CMD0 resets the SD card for setting it in idle state.
 
@@ -544,13 +842,25 @@ Send a SPI mode command CMD0 until receiving a proper R1 response (0x01). Rememb
 
 #+BEGIN_SRC c 
 uint8_t resp = 0;
-while (resp != 0x01){
+count = 0;
+while (resp != 0x01 && count < 100){
   sdcard_send_command(0,0);
-  resp = sdcard_receive();
-  while (resp & 0x80){
-    resp = sdcard_receive();
+  resp = sdcard_receive(0);
+  uint8_t count2 = 0;
+  while ((resp & 0x80) && (count2 < 100)){
+    resp = sdcard_receive(0);
+    count2++;
   }
+  if (count2 == 100) return 255;
+  count++;
 }
+if (count == 100) return 254; 
+#+END_SRC
+
+If ~stop_at_step~ is setted with stop at here, exit the function.
+
+#+BEGIN_SRC c
+if (stop_at_step == INIT_STOP_CMD0) return 1;
 #+END_SRC
 
 *** Try CMD8 for 2.0 cards
@@ -558,30 +868,100 @@ CMD8 asks about status condition and if the card can operate at the provided vol
 
 The paramaters bits 11-8 indicates the supplied voltage (VHS). The 7-0 bits of the parameter is a pattern that will be echoed at the R7 response. See section [[*R7][R7]] for description about the bits format.
 
-Fortunatelly, the Arduino's SD card module provide the SD card with the proper voltage. Although, the command has to be sended for changing the SD card state.
+Fortunatelly, the Arduino's SD card module provide the SD card with the proper voltage. Although, the command has to be sent for changing the SD card state.
 
 #+BEGIN_SRC c
+count = 0;
 sdcard_send_command(8, 0x1AA);
-do {
-  resp = sdcard_receive();
-} while (resp == 0xff);
+resp = sdcard_receive(1);
+if (resp == 0xff) return 253;
 #+END_SRC
 
-*** Send CMD58 command
-Send this command to read the CCS bit in OCR register. Se section [[*Operation Condition Register - OCR][Operation Condition Register - OCR]] for more information.
-
-The CMD58 response has got an R3 format. See section [[*R3][R3]] for the bits description. 
+Check which version this card is and call the v2 or v1 methods accordingly.
 
 #+BEGIN_SRC c
-sdcard_send_command(58, 0);
-do {
-  resp = sdcard_receive();
-} while (resp == 0xff); 
+  if (resp == 0x01) {
+#+END_SRC
+
+**** SD version 2
+If the pattern given (0x1AA) and the echo back at the response matches, then this is probably an SD card version 2. If an error or on response is provided, then is a version 1. In any case, a ACMD 41 must be sent.
+
+#+BEGIN_SRC c
+    resp = sdcard_receive(0);
+    resp = sdcard_receive(0);
+    uint8_t resp0 = sdcard_receive(0);
+    resp = sdcard_receive(0);
+    if ((resp0 & 0x0f) == 0x01 && 
+        (resp == 0xAA)) {
+#+END_SRC
+
+The pattern matches. This is probably a version 2 card. Send an ACMD41 command. This activates the card's initialization process.
+
+#+BEGIN_SRC c
+      if (!get_v2_capacity()) return 252;
+#+END_SRC
+
+Once the capacity is determined and the card initialized, send a CMD58. This reads the OCR registers for the CCS bit. If this bit is 0, then this is a v.2 card with byte address (SDSC), else this is a v.2 card with block address (SDHC/SDXC).
+
+#+BEGIN_SRC c
+      uint8_t cmd58resp[5];
+      send_cmd58(cmd58resp);
+      if ( (cmd58resp[0] == 0x01) &&
+           (cmd58resp[4] & 0b00000010)){
+        // CCS bit is 1
+        use_address = USE_BYTE_ADDRESS;
+      }else{
+        use_address = USE_BLOCK_ADDRESS;
+      } // if cmd58resp...  
+#+END_SRC
+
+However, if the pattern mismatch, return 255 meaning that initialization faled.
+
+#+BEGIN_SRC c
+  }else{ // if (resp0 & 0x0f... ) 0x1AA pattern mismatch
+    return 251;
+  } // if (resp0 & 0x0f...)
+#+END_SRC
+
+**** SD version 1
+But if the CMD8 failed, it means it is unsupported and thus, the card is not a v. 2 one.
+
+#+BEGIN_SRC c
+  }else{ // CMD8 failed (0x01 R1 answer)
+#+END_SRC
+
+Get the capacity with the ACMD41.
+
+#+BEGIN_SRC c
+    // It is a version 1 card.
+    if (!get_v1_capacity()){
+      // It is an MMC v.3 card.
+      if (!get_mmc_capacity()) return 250;
+    }
+#+END_SRC
+
+#+BEGIN_SRC c
+  } // if (resp == 0x01)... ("if" that checks CMD8 answer)
+#+END_SRC
+
+
+**** Stop if requested
+If ~stop_at_step~ is setted with stop at here, exit the function.
+
+#+BEGIN_SRC c
+if (stop_at_step == INIT_STOP_CMD8) return 1;
 #+END_SRC
 
 
 *** Send CMD16 command
 Try to force 512 bytes of block size. This is useful for working with FAT file systems.
+
+#+BEGIN_SRC c
+count = 0;
+sdcard_send_command(16, 0x00000200);
+resp = sdcard_receive(1);
+if (resp == 0xff) return 249;
+#+END_SRC
 
 *** End
 Now the SPI and the SD card is ready. Any command can be requested.
@@ -589,9 +969,9 @@ Now the SPI and the SD card is ready. Any command can be requested.
 End the sdcard initialization.
 
 #+BEGIN_SRC c
+  return 1;
 } // sdcard_init
 #+END_SRC
-
 
 ** Return the last command executed
 #+BEGIN_SRC c
@@ -600,10 +980,43 @@ uint8_t* sdcard_last_cmd(){
 }
 #+END_SRC
 
+** Return if using block or byte addresses
+#+BEGIN_SRC c
+uint8_t sdcard_use_address(){
+  return use_address;
+} // sdcard_use_address
+#+END_SRC
+
 * Main file
 :PROPERTIES:
 :header-args: :comments no :padline yes :tangle read.c
 :END:
+
+** License
+This work is under the GPL v3 license. 
+
+#+BEGIN_SRC c
+/* 
+   Copyright 2019 Christian Gimenez
+   
+   Author: Christian Gimenez   
+
+   read.c
+   
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation, either version 3 of the License, or
+   (at your option) any later version.
+   
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+   
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+#+END_SRC
 
 ** Include USART
 The USART library will be used to report to the user what the SD card answers.
@@ -623,28 +1036,67 @@ Include the SD card lib.
 void main(){
 #+END_SRC
 
-** Initialize libraries
+*** Initialize libraries
 #+BEGIN_SRC c
 serial_init();
 serial_send_string("Serial initialized\n\r");
-sdcard_init();
-serial_send_string("SD card initialized\n\r");
+uint8_t initret = sdcard_init(INIT_STOP_NONE);
+ if (initret) {
+   serial_send_string("SD card initialized\n\r");
+ }else{
+   serial_send_string("SD card initialization error:");
+   serial_send_hex(initret);
+ }
 #+END_SRC
 
-** Send a status command
-Set the CS to 0 and send CMD0 to the SD card. The CMD0 command is:
-
-: 01 000000 00000000 00000000 00000000 00000000 1001010 1
+*** Get the OCR register 
+Retrieve the OCR register to see if the initialization went succesfuly.
 
 #+BEGIN_SRC c
-  sdcard_send_command(0, 0);
-  uint8_t resp = sdcard_receive();
-  serial_put_char(resp);
+sdcard_send_command(58,0);
+serial_send_string("CMD58:");
+uint8_t resp[5];
+resp[0] = sdcard_receive(1);
+serial_send_hex(resp[0]);
+resp[1] = sdcard_receive(0);
+serial_send_hex(resp[1]);
+resp[2] = sdcard_receive(0);
+serial_send_hex(resp[2]);
+resp[3] = sdcard_receive(0);
+serial_send_hex(resp[3]);
+resp[4] = sdcard_receive(0);
+serial_send_hex(resp[4]);
 #+END_SRC
 
-The SD card will send the response: 8 bits that must be 0b00000001.
+*** Read the card content
+Send the CMD17 command to read up to 512 bytes. The 512 is setted at the initialization with CMD 16 command. The parameter 0x00 means to start reading from this address.
 
-** End Main
+#+BEGIN_SRC c
+  // Read some blocks
+  uint8_t res;
+  sdcard_send_command(17, 0x00);
+  serial_send_string("\n\rCMD17:");
+  res = sdcard_receive(1);
+  serial_send_hex(res);
+  serial_send_string("\n\r");
+  
+  if (res == 0x00){
+    int i = 0;
+    for (i = 0; i < 512; i++){
+      res = sdcard_receive(0);
+      serial_send_hex(res);
+      if (i % 2 == 0) {
+        serial_put_char(' ');
+      }
+      if (i % 16 == 0){
+        serial_send_string("\n\r");
+      }
+    }
+  } 
+#+END_SRC
+
+
+*** End Main
 
 #+BEGIN_SRC c
 } // main
