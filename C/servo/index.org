@@ -1,6 +1,8 @@
+
+* Introduction
 The servo motor uses a PWM signal communication. This protocol consist of a message sended between a period according to the rise or fall of the edges. This period is controlled with a clock which is used for counting the amount of clicles a rising or falling edge has.
 
-The following is a Figure that illustrates how the signal has to be sended.
+The following Figure illustrates how the signal has to be sended.
 
 [[file:Sinais_controle_servomotor.JPG]]
 
@@ -21,6 +23,32 @@ Also, it is needed to control the pin directions. ODDRB can be used at the Ardui
 :PROPERTIES:
 :header-args: :tangle servo.h :comments no :padline yes
 :END:
+
+** License
+This work is under the GPL v3 license. 
+
+#+BEGIN_SRC c
+/* 
+   Copyright 2019 Christian Gimenez
+   
+   Author: Christian Gimenez   
+
+   servo.h
+   
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation, either version 3 of the License, or
+   (at your option) any later version.
+   
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+   
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+#+END_SRC
 
 ** Initialize header
 Do not add the header more than once.
@@ -51,6 +79,32 @@ void servo_rotate_360();
 :PROPERTIES:
 :header-args: :tangle servo.c :comments no :padline yes
 :END:
+
+** License
+This work is under the GPL v3 license. 
+
+#+BEGIN_SRC c
+/* 
+   Copyright 2019 Christian Gimenez
+   
+   Author: Christian Gimenez   
+
+   servo.c
+   
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation, either version 3 of the License, or
+   (at your option) any later version.
+   
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+   
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+#+END_SRC
 
 ** Include headers
 Include AVR I/O ports names.
@@ -282,6 +336,33 @@ void servo_rotate_m180(){
 :header-args: :comments no :padline yes :tangle main.c
 :END:
 
+** License
+This work is under the GPL v3 license. 
+
+#+BEGIN_SRC c
+/* 
+   Copyright 2019 Christian Gimenez
+   
+   Author: Christian Gimenez   
+
+   main.c
+   
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation, either version 3 of the License, or
+   (at your option) any later version.
+   
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+   
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+#+END_SRC
+
+** Include headers
 Include the servo driver explained above.
 
 #+BEGIN_SRC c
@@ -289,6 +370,7 @@ Include the servo driver explained above.
 #include <avr/io.h>
 #+END_SRC
 
+** Prepare ports
 Use the led to indicate that the servo is waiting.
 
 #+BEGIN_SRC c
@@ -296,6 +378,7 @@ volatile uint8_t *ddb = (uint8_t*) (0x24);
 volatile uint8_t *portb = (uint8_t*) (0x25);
 #+END_SRC
 
+** Main function
 Start the main function.
 
 #+BEGIN_SRC c
@@ -308,7 +391,6 @@ Set the 5th led to output.
 *ddb |= (1<<DDB5);
 *portb &= 0b11011111;
 #+END_SRC
-
 
 Initialize the servo driver.
 
@@ -364,13 +446,13 @@ End the main function.
   #+INFOJS_OPT: view:info toc:t ftoc:t ltoc:t mouse:underline buttons:t path:libs/org-info.js
   #+EXPORT_SELECT_TAGS: export
   #+EXPORT_EXCLUDE_TAGS: noexport
-  #+HTML_LINK_UP: index.html
-  #+HTML_LINK_HOME: index.html
+  #+HTML_LINK_UP: ../../index.html
+  #+HTML_LINK_HOME: ../../index.html
 
   # -- For ox-twbs or HTML Export
-  #+HTML_HEAD: <link href="libs/bootstrap.min.css" rel="stylesheet">
-  #+HTML_HEAD: <script src="libs/jquery.min.js"></script> 
-  #+HTML_HEAD: <script src="libs/bootstrap.min.js"></script>
+  #+HTML_HEAD: <link href="../../libs/bootstrap.min.css" rel="stylesheet">
+  #+HTML_HEAD: <script src="../../libs/jquery.min.js"></script> 
+  #+HTML_HEAD: <script src="../../libs/bootstrap.min.js"></script>
   #+LANGUAGE: en
 
   # Local Variables:
