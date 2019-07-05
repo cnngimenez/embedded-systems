@@ -140,7 +140,7 @@ void dht12_init(){
 *** Set the Bit rate
 The bit rate must be between 100Khz and 400Khz for the DHT12 sensor. Remember that the CPU frequency is 16MHz = 16000000Hz.
 
-See section [[*SCL Frequency][SCL Frequency]] for more information.
+See [[file:../C/libs/i2c.org][I2C library documentation]] for more information.
 
 $$100000Hz = \frac{16000000}{16 + 2(TWBR) \cdot(prescaler)}$$
 
