@@ -5,9 +5,11 @@ Examples made for the Arduino board.
 - Libraries
   - [[file:C/libs/usart-lib.org][UART Library]]
   - [[file:C/libs/lcd.org][LCD library]]
+  - [[file:C/libs/i2c.org][I2C library]]
 - [[file:C/echo/index.org][Serial Echo Example]] (UART example)
 - [[file:C/servo/index.org][Servo Motor Example]] (PWM example)
 - [[file:C/sdcard/index.org][SD card Example]] (SPI example)
+- [[file:C/dht12/index.org][DHT12 Temperature and Humidity Sensor Example]] (I2C example)
 
 * Assembler
 
