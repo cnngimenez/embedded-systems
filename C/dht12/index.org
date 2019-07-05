@@ -1,0 +1,937 @@
+
+* Introduction
+  The DHT12 is a temperature and humidity sensor. It supports two protocols: I2C and its own single cable one. In this guide the I2C protocol is used.
+
+* Driver header file
+:PROPERTIES:
+:header-args: :comments no :padline yes :tangle dht12.h
+:END:
+
+** License
+#+BEGIN_SRC c
+/* 
+   Copyright 2019 Christian Gimenez
+   
+   Author: Christian Gimenez   
+
+   dht12.h
+   
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation, either version 3 of the License, or
+   (at your option) any later version.
+   
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+   
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+#+END_SRC
+
+** Start header
+Avoid including the header twice.
+#+BEGIN_SRC c
+#ifndef _DHT12_H
+#define _DHT12_H 1
+#+END_SRC
+
+Include some integer definitions (like ~uint8_t~).
+
+#+BEGIN_SRC c
+#include <stdint.h>
+#+END_SRC
+
+** Define structures
+The following structure is returned when getting the data from the sensor.
+
+#+BEGIN_SRC c
+typedef struct {
+  uint8_t humidity;
+  uint8_t humidity_dec;
+  uint8_t temp;
+  uint8_t temp_dec;
+  uint8_t checksum;
+} dht12data_t;
+#+END_SRC
+
+** Define variables
+*** Last reading
+This store the last temperature and humidity reading.
+
+#+BEGIN_SRC c
+dht12data_t last_reading;
+#+END_SRC
+
+** Define functions
+
+Initialize the I2C and DHT12 sensor.
+
+#+BEGIN_SRC c
+void dht12_init();
+#+END_SRC
+
+Request the data. The DHT12 responds with temperature and humidity. Define some constants used as return value for the function.
+
+The returned error codes are defined as Master Transmitter error codes or Master Receiver error codes at the [[file:../libs/i2c.org][I2C library documentation]].
+
+#+BEGIN_SRC c
+#define GET_SUCCESS 1
+int dht12_get();
+#+END_SRC
+
+
+
+#+BEGIN_SRC c
+#define DHT12_HUMIDITY 0x00
+#define DHT12_HUMDEC 0x01
+#define DHT12_TEMP 0x02
+#define DHT12_TEMPDEC 0x03
+#define DHT12_CHECKSUM 0x04
+uint8_t dht12_get_data(uint8_t addr, uint8_t *data);
+#+END_SRC
+
+
+** End header
+#+BEGIN_SRC c
+#endif // _DHT12_H
+#+END_SRC
+
+* Driver body file
+:PROPERTIES:
+:header-args: :comments no :padline yes :tangle dht12.c
+:END:
+
+** Include headers
+Include the definitions of this body file.
+
+#+BEGIN_SRC c
+#include "dht12.h"
+#+END_SRC
+
+Include some integers definitions like ~uint8_t~.
+
+#+BEGIN_SRC c
+#include <stdint.h>
+#+END_SRC
+
+Include definition of Arduino's ports and bits names.
+
+#+BEGIN_SRC c
+#include <avr/io.h>
+#+END_SRC
+
+Include the I2C library.
+
+#+BEGIN_SRC c
+#include "../libs/i2c.h"
+#+END_SRC
+
+
+** Initialize the DHT12 sensor
+The ATmega must act as a master receiver and the DHT12 as a slave transmitter. For this reason, the MCU must send a START condition with the command that the DHT12 needs for sending the temperature and humidity data.
+
+#+BEGIN_SRC c
+void dht12_init(){
+#+END_SRC
+
+*** Set the Bit rate
+The bit rate must be between 100Khz and 400Khz for the DHT12 sensor. Remember that the CPU frequency is 16MHz = 16000000Hz.
+
+See section [[*SCL Frequency][SCL Frequency]] for more information.
+
+$$100000Hz = \frac{16000000}{16 + 2(TWBR) \cdot(prescaler)}$$
+
+Considering prescaler = 1, then:
+
+\(
+100000Hz (16 + 2 (TWBR) \cdot prescaler) = 16000000\\
+16 + 2 (TWBR) \cdot prescaler = \frac{16000000Hz}{100000Hz}\\
+TWBR \cdot prescaler = (\frac{16000000}{100000} -16) \cdot \frac{1}{2}\\
+TWBR \cdot prescaler = 72
+\)
+
+TWBR = 72 and prescaler = 1 can be minimum values for achieving 100KHz.
+
+\(
+400000Hz = \frac{16000000}{16 + 2 (TWBR) \cdot (prescaler)}\\
+TWBR \cdot prescaler = (\frac{16000000}{400000} - 16) \cdot \frac{1}{2}\\
+TWBR \cdot prescaler = 12
+\)
+
+Maximum value is TWBR = 12 and prescaler = 1.
+
+A TWBR value between (12;72) should be selected with prescaler at 1.
+
+#+BEGIN_SRC c
+i2c_init(14, 0b11111100); // TMBR = 14, TWPS = 0
+#+END_SRC
+
+*** Get a reading
+#+BEGIN_SRC c
+dht12_get();
+#+END_SRC
+
+*** End function
+#+BEGIN_SRC c
+} // dht12_init
+#+END_SRC
+
+** Get a Reading
+To get a reading, the MCU takes control of the I2C bus and request the data.
+
+The DHT12 sends the following data.
+
+|--------------+-----+--------------------------|
+| Byte Address | R/W | Desc                     |
+|--------------+-----+--------------------------|
+|         0x00 | R   | Humidity integral digits |
+|         0x01 | R   | Humidity scale           |
+|         0x02 | R   | Temp. integral digits    |
+|         0x03 | R   | Temperature scale        |
+|         0x04 | R   | Checksum                 |
+|--------------+-----+--------------------------|
+
+#+BEGIN_SRC c
+uint8_t dht12_get_data(uint8_t addr, uint8_t *data){
+#+END_SRC
+
+*** Required variables
+
+#+BEGIN_SRC c
+uint8_t resp;
+#+END_SRC
+
+*** Send START
+
+#+BEGIN_SRC c
+resp = i2c_start();
+if (resp != MT_START_TRANSMITTED || resp != MT_RSTART_TRANSMITTED){
+ return resp;
+}
+#+END_SRC
+
+*** Send the SLA+W
+Send a SLA+W to request to select the DHT12 among other slaves. The DHT12 address is 0xB8.
+
+#+BEGIN_SRC c
+resp = i2c_sla_w(0xb8);
+if (resp != MT_SLAACK_RECEIVED) {
+  return resp;
+}
+#+END_SRC
+
+*** Send the DHT12 byte address 
+
+#+BEGIN_SRC c
+resp = i2c_send(addr);
+if (resp != MT_ACK_DATAREC) {
+  return resp;
+}
+#+END_SRC
+
+*** Re-START the I2C connection
+
+#+BEGIN_SRC c
+resp = i2c_start();
+if (resp != MR_RSTART_TRANSMITTED){
+  return resp;
+}
+#+END_SRC
+
+*** Send a SLA+R
+#+BEGIN_SRC c
+resp = i2c_sla_r(0xb8);
+if (resp != MR_SLAACK_RECEIVED) {
+  return resp;
+}
+#+END_SRC
+
+*** Receive the data
+#+BEGIN_SRC c
+resp = i2c_receive(data, 1);
+if (resp != MR_NACK_DATAREC){
+  return resp;
+}
+#+END_SRC
+
+*** Send a STOP
+
+#+BEGIN_SRC c
+resp = i2c_stop();
+#+END_SRC
+
+*** End function
+#+BEGIN_SRC c
+  return 1;
+} // dht12_get_data
+#+END_SRC
+
+** Get all data
+The overall process should start the connection and send the byte address of the reading, then restart the connection and receive the byte data and stop the transmission. 
+
+#+BEGIN_SRC c
+int dht12_get(){
+#+END_SRC
+
+A temporary variable to store the received data and status code.
+
+#+BEGIN_SRC c
+uint8_t data;
+uint8_t resp;
+#+END_SRC
+
+*** Get humidity
+#+BEGIN_SRC c
+resp = dht12_get_data(0x00, &data);
+if (resp != 1){
+  return resp;
+}
+last_reading.humidity = data;
+#+END_SRC
+
+*** Get humidity decimals
+#+BEGIN_SRC c
+resp = dht12_get_data(0x01, &data);
+if (resp != 1){
+  return resp;
+}
+last_reading.humidity_dec = data;
+#+END_SRC
+
+*** Get temperature integer part
+#+BEGIN_SRC c
+resp = dht12_get_data(0x02, &data);
+if (resp != 1){
+  return resp;
+}
+last_reading.temp = data;
+#+END_SRC
+
+*** Get temperature decimals
+#+BEGIN_SRC c
+resp = dht12_get_data(0x03, &data);
+if (resp != 1){
+  return resp;
+}
+last_reading.temp_dec = data;
+#+END_SRC
+
+*** Get the checksum
+#+BEGIN_SRC c
+resp = dht12_get_data(0x04, &data);
+if (resp != 1){
+  return resp;
+}
+last_reading.checksum = data;
+#+END_SRC
+
+*** End function
+Return success and end the function.
+
+#+BEGIN_SRC c
+  return GET_SUCCESS;
+} // dht12_get
+#+END_SRC
+
+* Main file
+:PROPERTIES:
+:header-args: :comments no :padline yes :tangle main.c
+:END:
+
+Read and display temperature and humidity continuously.
+
+Include the DHT12 driver above implemented.
+
+#+BEGIN_SRC c
+#include "dht12.h"
+#+END_SRC
+
+Include the USART library for reporting the results to the PC.
+
+#+BEGIN_SRC c
+#include "../libs/usart-lib.h"
+#+END_SRC
+
+
+Start the main function.
+
+#+BEGIN_SRC c
+void main(){
+#+END_SRC
+
+Initialize the USART.
+
+#+BEGIN_SRC c
+serial_init();
+serial_send_string("USART initialized.\n\r");
+#+END_SRC
+
+Initialize the DHT12.
+
+#+BEGIN_SRC c
+dht12_init();
+serial_send_string("DHT12 initialized.\n\r");
+#+END_SRC
+
+Variables needed.
+
+#+BEGIN_SRC c
+unsigned long i = 0;
+uint8_t resp;
+#+END_SRC
+
+
+Loop forever.
+
+#+BEGIN_SRC c
+while (1){
+#+END_SRC
+
+Report the last information.
+
+#+BEGIN_SRC c
+serial_send_string("\n\rTemp:");
+serial_send_hex(last_reading.temp);
+serial_send_string("\n\rTemp Decimals:");
+serial_send_hex(last_reading.temp_dec);
+
+serial_send_string("\n\rHum:");
+serial_send_hex(last_reading.humidity);
+serial_send_string("\n\rHum Decimals:");
+serial_send_hex(last_reading.humidity_dec);
+serial_send_string("\n\r");
+#+END_SRC
+
+Get the next reading.
+
+#+BEGIN_SRC c
+resp = dht12_get();
+if (resp != GET_SUCCESS){
+  serial_send_string("Error getting data\n\r");
+  serial_send_hex(resp);
+  serial_send_string("\n\r");
+}
+#+END_SRC
+
+Wait for the next reading.
+
+#+BEGIN_SRC c
+for (i = 0; i < 4000000; i++);
+#+END_SRC
+
+#+BEGIN_SRC c
+} // while
+#+END_SRC
+
+End the main function.
+
+#+BEGIN_SRC c
+} // main
+#+END_SRC
+
+
+
+
+* A Main Test file
+:PROPERTIES:
+:header-args: :comments no :padline yes :tangle test.c
+:END:
+
+The following program is not modularised properly in order to display the I2C protocol. The library I2C is used. Please refer to [[file:../libs/i2c.org][the I2C library documentation]] for more information.
+
+** License
+#+BEGIN_SRC c
+/* 
+   Copyright 2019 Christian Gimenez
+   
+   Author: Christian Gimenez   
+
+   test.c
+   
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation, either version 3 of the License, or
+   (at your option) any later version.
+   
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+   
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+#+END_SRC
+
+** Include headers
+Include integer types like ~uint8_t~.
+
+#+BEGIN_SRC c
+#include <stdint.h>
+#+END_SRC
+
+Include the USART library for sending debugging information to the PC. Please, refer to [[file:../libs/usart-lib.org][the Usart-lib documentation]] for more information.
+
+#+BEGIN_SRC c
+#include "../libs/usart-lib.h"
+#+END_SRC
+
+Include the I2C library.
+
+#+BEGIN_SRC c
+#include "../libs/i2c.h"
+#+END_SRC
+
+** Main body
+
+#+BEGIN_SRC c
+void main(){
+#+END_SRC
+
+*** Initialize libraries
+USART library will be used to report to the user the status of each program step. Thus, initialize the USART library first.
+
+#+BEGIN_SRC c
+  serial_init();
+  serial_send_string("\n\rUSART initialized.\n\r");
+#+END_SRC
+
+Initialize the I2C library. Configure the TWI module's clock for using more than 100Khz and less than 400Khz bit rate. See the calculations at section [[*Set the Bit rate][Set the Bit rate]].
+
+#+BEGIN_SRC c
+  i2c_init(14, 0);
+  serial_send_string("I2C initialized.\n\r");
+#+END_SRC
+
+*** Variables 
+The following variables are needed in order to store the status code and the data returned by each I2C command.
+
+#+BEGIN_SRC c
+  uint8_t resp;
+  uint8_t data;
+#+END_SRC
+
+*** Get humidity values
+The DHT12 module retrieves the humidity at address 0x00 and 0x01. Firstly, the I2C protocol must be started and the MCU must be at MT mode. Secondly, send the address data to the DHT12. Thirdly, resend a START message, start an MR mode and get the data. Finally, end the transmission.
+
+According to the DHT12 datasheet, the SLA+W and SLA+R must be sended to the 0xB8 address.
+
+**** Send a START
+
+#+BEGIN_SRC c
+  resp = i2c_start();
+  serial_send_string("\n\rSTART:");
+  serial_send_hex(resp);
+#+END_SRC
+
+**** Send a SLA+W
+#+BEGIN_SRC c
+  resp = i2c_sla_w(0xb8);
+  serial_send_string("\n\rSLA+W:");
+  serial_send_hex(resp);
+#+END_SRC
+
+**** Send the humidity address
+#+BEGIN_SRC c
+  resp = i2c_send(0x00);
+  serial_send_string("\n\rSend data:");
+  serial_send_hex(resp);
+#+END_SRC
+
+**** Send a Re-START 
+
+#+BEGIN_SRC c
+  resp = i2c_start();
+  serial_send_string("\n\rSTART:");
+  serial_send_hex(resp);
+#+END_SRC
+
+**** Send a SLA+R
+
+#+BEGIN_SRC c
+  resp = i2c_sla_r(0xb8);
+  serial_send_string("\n\rSLA+R:");
+  serial_send_hex(resp);
+#+END_SRC
+
+**** Receive the data
+Receive the data and the MCU must answer a NACK to end the transmission.
+
+#+BEGIN_SRC c
+  resp = i2c_receive(&data, 1);
+  serial_send_string("\n\rReceived data:");
+  serial_send_hex(data);
+#+END_SRC
+
+Send the status code to the serial.
+
+#+BEGIN_SRC c
+  serial_send_string(" | Status:");
+  serial_send_hex(resp);
+#+END_SRC
+
+**** STOP the I2C
+
+#+BEGIN_SRC c
+  resp = i2c_stop();
+  serial_send_string("\n\rSTOP:");
+  serial_send_hex(resp);
+#+END_SRC
+
+
+
+
+
+
+
+
+
+*** Get humidity decimal values
+The DHT12 module retrieves the humidity at address 0x00 and 0x01. Firstly, the I2C protocol must be started and the MCU must be at MT mode. Secondly, send the address data to the DHT12. Thirdly, resend a START message, start an MR mode and get the data. Finally, end the transmission.
+
+According to the DHT12 datasheet, the SLA+W and SLA+R must be sended to the 0xB8 address.
+
+**** Send a START
+
+#+BEGIN_SRC c
+  resp = i2c_start();
+  serial_send_string("\n\rSTART:");
+  serial_send_hex(resp);
+#+END_SRC
+
+**** Send a SLA+W
+#+BEGIN_SRC c
+  resp = i2c_sla_w(0xb8);
+  serial_send_string("\n\rSLA+W:");
+  serial_send_hex(resp);
+#+END_SRC
+
+**** Send the humidity decimal address
+#+BEGIN_SRC c
+  resp = i2c_send(0x01);
+  serial_send_string("\n\rSend data:");
+  serial_send_hex(resp);
+#+END_SRC
+
+**** Send a Re-START
+
+#+BEGIN_SRC c
+  resp = i2c_start();
+  serial_send_string("\n\rSTART:");
+  serial_send_hex(resp);
+#+END_SRC
+
+**** Send a SLA+R
+
+#+BEGIN_SRC c
+  resp = i2c_sla_r(0xb8);
+  serial_send_string("\n\rSLA+R:");
+  serial_send_hex(resp);
+#+END_SRC
+
+**** Receive the data
+Receive the data and the MCU must answer a NACK to end the transmission.
+
+#+BEGIN_SRC c
+  resp = i2c_receive(&data, 1);
+  serial_send_string("\n\rReceived data:");
+  serial_send_hex(data);
+#+END_SRC
+
+Send the status code to the serial.
+
+#+BEGIN_SRC c
+  serial_send_string(" | Status:");
+  serial_send_hex(resp);
+#+END_SRC
+
+**** STOP the I2C
+
+#+BEGIN_SRC c
+  resp = i2c_stop();
+  serial_send_string("\n\rSTOP:");
+  serial_send_hex(resp);
+#+END_SRC
+
+
+
+
+
+
+
+
+
+
+*** Get temperature values
+The DHT12 module retrieves the humidity at address 0x00 and 0x01. Firstly, the I2C protocol must be started and the MCU must be at MT mode. Secondly, send the address data to the DHT12. Thirdly, resend a START message, start an MR mode and get the data. Finally, end the transmission.
+
+According to the DHT12 datasheet, the SLA+W and SLA+R must be sended to the 0xB8 address.
+
+**** Send a START
+
+#+BEGIN_SRC c
+  resp = i2c_start();
+  serial_send_string("\n\rSTART:");
+  serial_send_hex(resp);
+#+END_SRC
+
+**** Send a SLA+W
+#+BEGIN_SRC c
+  resp = i2c_sla_w(0xb8);
+  serial_send_string("\n\rSLA+W:");
+  serial_send_hex(resp);
+#+END_SRC
+
+**** Send the temperature address
+#+BEGIN_SRC c
+  resp = i2c_send(0x02);
+  serial_send_string("\n\rSend data:");
+  serial_send_hex(resp);
+#+END_SRC
+
+**** Send a Re-START 
+
+#+BEGIN_SRC c
+  resp = i2c_start();
+  serial_send_string("\n\rSTART:");
+  serial_send_hex(resp);
+#+END_SRC
+
+**** Send a SLA+R
+
+#+BEGIN_SRC c
+  resp = i2c_sla_r(0xb8);
+  serial_send_string("\n\rSLA+R:");
+  serial_send_hex(resp);
+#+END_SRC
+
+**** Receive the data
+Receive the data and the MCU must answer a NACK to end the transmission.
+
+#+BEGIN_SRC c
+  resp = i2c_receive(&data, 1);
+  serial_send_string("\n\rReceived data:");
+  serial_send_hex(data);
+#+END_SRC
+
+Send the status code to the serial.
+
+#+BEGIN_SRC c
+  serial_send_string(" | Status:");
+  serial_send_hex(resp);
+#+END_SRC
+
+**** STOP the I2C
+
+#+BEGIN_SRC c
+  resp = i2c_stop();
+  serial_send_string("\n\rSTOP:");
+  serial_send_hex(resp);
+#+END_SRC
+
+
+
+
+
+
+
+
+
+*** Get temperature decimals values
+The DHT12 module retrieves the humidity at address 0x00 and 0x01. Firstly, the I2C protocol must be started and the MCU must be at MT mode. Secondly, send the address data to the DHT12. Thirdly, resend a START message, start an MR mode and get the data. Finally, end the transmission.
+
+According to the DHT12 datasheet, the SLA+W and SLA+R must be sended to the 0xB8 address.
+
+**** Send a START
+
+#+BEGIN_SRC c
+  resp = i2c_start();
+  serial_send_string("\n\rSTART:");
+  serial_send_hex(resp);
+#+END_SRC
+
+**** Send a SLA+W
+#+BEGIN_SRC c
+  resp = i2c_sla_w(0xb8);
+  serial_send_string("\n\rSLA+W:");
+  serial_send_hex(resp);
+#+END_SRC
+
+**** Send the temperature decimals address
+#+BEGIN_SRC c
+  resp = i2c_send(0x03);
+  serial_send_string("\n\rSend data:");
+  serial_send_hex(resp);
+#+END_SRC
+
+**** Send a Re-START 
+
+#+BEGIN_SRC c
+  resp = i2c_start();
+  serial_send_string("\n\rSTART:");
+  serial_send_hex(resp);
+#+END_SRC
+
+**** Send a SLA+R
+
+#+BEGIN_SRC c
+  resp = i2c_sla_r(0xb8);
+  serial_send_string("\n\rSLA+R:");
+  serial_send_hex(resp);
+#+END_SRC
+
+**** Receive the data
+Receive the data and the MCU must answer a NACK to end the transmission.
+
+#+BEGIN_SRC c
+  resp = i2c_receive(&data, 1);
+  serial_send_string("\n\rReceived data:");
+  serial_send_hex(data);
+#+END_SRC
+
+Send the status code to the serial.
+
+#+BEGIN_SRC c
+  serial_send_string(" | Status:");
+  serial_send_hex(resp);
+#+END_SRC
+
+**** STOP the I2C
+
+#+BEGIN_SRC c
+  resp = i2c_stop();
+  serial_send_string("\n\rSTOP:");
+  serial_send_hex(resp);
+#+END_SRC
+
+
+
+
+
+
+
+
+*** Get checksum values
+The DHT12 module retrieves the humidity at address 0x00 and 0x01. Firstly, the I2C protocol must be started and the MCU must be at MT mode. Secondly, send the address data to the DHT12. Thirdly, resend a START message, start an MR mode and get the data. Finally, end the transmission.
+
+According to the DHT12 datasheet, the SLA+W and SLA+R must be sended to the 0xB8 address.
+
+**** Send a START
+
+#+BEGIN_SRC c
+  resp = i2c_start();
+  serial_send_string("\n\rSTART:");
+  serial_send_hex(resp);
+#+END_SRC
+
+**** Send a SLA+W
+#+BEGIN_SRC c
+  resp = i2c_sla_w(0xb8);
+  serial_send_string("\n\rSLA+W:");
+  serial_send_hex(resp);
+#+END_SRC
+
+**** Send the checksum address
+#+BEGIN_SRC c
+  resp = i2c_send(0x04);
+  serial_send_string("\n\rSend data:");
+  serial_send_hex(resp);
+#+END_SRC
+
+**** Send a Re-START 
+
+#+BEGIN_SRC c
+  resp = i2c_start();
+  serial_send_string("\n\rSTART:");
+  serial_send_hex(resp);
+#+END_SRC
+
+**** Send a SLA+R
+
+#+BEGIN_SRC c
+  resp = i2c_sla_r(0xb8);
+  serial_send_string("\n\rSLA+R:");
+  serial_send_hex(resp);
+#+END_SRC
+
+**** Receive the data
+Receive the data and the MCU must answer a NACK to end the transmission.
+
+#+BEGIN_SRC c
+  resp = i2c_receive(&data, 1);
+  serial_send_string("\n\rReceived data:");
+  serial_send_hex(data);
+#+END_SRC
+
+Send the status code to the serial.
+
+#+BEGIN_SRC c
+  serial_send_string(" | Status:");
+  serial_send_hex(resp);
+#+END_SRC
+
+**** STOP the I2C
+
+#+BEGIN_SRC c
+  resp = i2c_stop();
+  serial_send_string("\n\rSTOP:");
+  serial_send_hex(resp);
+#+END_SRC
+
+
+
+
+
+
+
+
+
+
+** End the main body
+
+#+BEGIN_SRC c
+} // main
+#+END_SRC
+
+
+* Meta     :noexport:
+
+  # ----------------------------------------------------------------------
+  #+TITLE:  DHT12 Example
+  #+AUTHOR: Christian Gimenez
+  #+DATE:   02 jul 2019
+  #+EMAIL:
+  #+DESCRIPTION: 
+  #+KEYWORDS: 
+
+  #+STARTUP: inlineimages hidestars content hideblocks entitiespretty indent fninline latexpreview
+  #+TODO: TODO(t!) CURRENT(c!) PAUSED(p!) | DONE(d!) CANCELED(C!@)
+  #+OPTIONS:   H:3 num:t toc:t \n:nil @:t ::t |:t ^:{} -:t f:t *:t <:t
+  #+OPTIONS:   TeX:t LaTeX:t skip:nil d:nil todo:t pri:nil tags:not-in-toc tex:imagemagick
+  #+LINK_UP:   
+  #+LINK_HOME: 
+  #+XSLT:
+
+  # -- HTML Export
+  #+INFOJS_OPT: view:info toc:t ftoc:t ltoc:t mouse:underline buttons:t path:libs/org-info.js
+  #+EXPORT_SELECT_TAGS: export
+  #+EXPORT_EXCLUDE_TAGS: noexport
+  #+HTML_LINK_UP: ../../index.html
+  #+HTML_LINK_HOME: ../../index.html
+
+  # -- For ox-twbs or HTML Export
+  #+HTML_HEAD: <link href="../../libs/bootstrap.min.css" rel="stylesheet">
+  #+HTML_HEAD: <script src="../../libs/jquery.min.js"></script> 
+  #+HTML_HEAD: <script src="../../libs/bootstrap.min.js"></script>
+  #+LANGUAGE: en
+
+  # Local Variables:
+  # org-hide-emphasis-markers: t
+  # org-use-sub-superscripts: "{}"
+  # fill-column: 80
+  # visual-line-fringe-indicators: t
+  # ispell-local-dictionary: "british"
+  # End:

@@ -41,7 +41,7 @@ Important registers:
  */
 #+END_SRC
 
-** Star header
+** Start header
 Don't include the header more than once.
 
 #+BEGIN_SRC c
@@ -170,13 +170,13 @@ Include AVR I/O register and bit names (like ~RXEN0~).
 
    #+BEGIN_SRC c
      typedef struct {
-       uint8_t status_control_a;
-       uint8_t status_control_b;
-       uint8_t status_control_c;
-       uint8_t reserved1;
-       uint8_t baud_rate_l;
-       uint8_t baud_rate_h;
-       uint8_t data;
+       uint8_t status_control_a;  // 0xC0 UCSR0A
+       uint8_t status_control_b;  // 0xC1 UCSR0B
+       uint8_t status_control_c;  // 0xC2 UCSR0C
+       uint8_t reserved1;         // 0xC3
+       uint8_t baud_rate_l;       // 0xC4 UBRR0L
+       uint8_t baud_rate_h;       // 0xC5 UBRR0H
+       uint8_t data;              // 0xC6 UDR0
      } volatile uart_t;
    #+END_SRC
 
