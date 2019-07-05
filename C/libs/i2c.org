@@ -1,0 +1,692 @@
+
+* Introduction
+The I2C protocol is a two wired one that communicates between one to many devices.
+
+** Roles
+One of the devices must be a master and the other slaves. Also, the role of transmitter and receiver must be setted at first by the master. Thus, there are four possible states for a device:
+
+- Master Receiver :: The master requested something for a slave, and is accepting data.
+- Master Transmitter :: The master wants to send information to a slave.
+- Slave Receiver :: The master wants to send information, and this device is a slave that must receive it.
+- Slave Transmitter :: The master requested some data and this device is a slave that must give them.
+
+
+** Wires
+The wires are:
+
+- SDA :: The data wire.
+- SCL :: The clock wire.
+
+The clock signal must be provided by the master.
+
+** Signals
+There are these kind of signals depending on the clock:
+
+- START :: It is when the master lowers the SDA while in the middle of the high SCL signal. It means that the master is ready for sending a request.
+- STOP :: It is when the master rises the SDA while in the middle of the high SCL signal. It means that the master releases the wire.
+- REPEATED START :: Same as START signal but without sending the STOP. It is used when the master does not want to relinquish control of the bus and is ready for sending another request.
+- Data bits :: When the SDA is high or low before the SCL and maintain it during the cicle.
+
+Usually, the master request a START signal, send the request, receive the response, and send the STOP to free the bus. Also, if the master device requires more information, it can use a REPEATED START instead a STOP, repeats the request and receive the answer, and send the STOP.
+
+** Type of data
+There are two types of data: Address packet format and data packet format. 
+
+*** Address Packet Format
+This packet type has got 9 bits and is used for requesting attention to all or to a speciffic slave. Also, it declares if it is a reading or writing request (if the master is a receiver or transmitter). An ACK bit is also sended to send an acknowledge or to indicate that the address has not been sended or received properly.
+
+| /            | <        |           | >        | <>  | <>  |
+|--------------+----------+-----------+----------+-----+-----|
+| Bits:        | 1        |       2-6 | 7        | 8   | 9   |
+|--------------+----------+-----------+----------+-----+-----|
+| Description: | Addr MSB | Addr bits | Addr LSB | R/W | ACK |
+|--------------+----------+-----------+----------+-----+-----|
+
+There are four types of reserved address:
+
+- ~0000 000~ is for broadcasting the message.
+- ~1111 xxx~ is reserved for future purposes.
+
+An address packet can be referenced as:
+
+- SLA+R :: A slave address with a R/W bit setted to 1 (READ).
+- SLA+W :: A slave address with a R/W bit setted to 0 (WRITE).
+
+The slave should send an ACK in response to its own SLA+R or SLA+W request.
+
+*** Data Packet Format
+This format has also got 9 bits. It is used for sending a command or the data. The format is as follows:
+
+| /            | <        |           | >        | <>  |
+|--------------+----------+-----------+----------+-----|
+| Bits:        | 1        |       2-7 | 8        | 9   |
+|--------------+----------+-----------+----------+-----|
+| Description: | Data MSB | Data bits | Data LSB | ACK |
+|--------------+----------+-----------+----------+-----|
+
+If the receiver should send an ACK in response to a succesful transmission.
+
+** Combining Signals and Packets
+The transmission is started by the master. It is usually as follows:
+
+|-------+--------------------+---+--------------------+------|
+|       | Addr Packet Format | 0 | Data Packet Format |      |
+| START | SLA+R/W            | 0 | DATA BYTE          | STOP |
+|-------+--------------------+---+--------------------+------|
+
+** I2C ATmega Module
+The ATmega processor provides a module for managing the two wired bus and for implementing the I2C protocol.
+
+Remember that there are some bits to configure first to activate pull-up resistors. The MCU Control Register (MCUCR) at 0x55 RAM address is has the bit PUD that enables or disables the pull-ups resistors globally and it has prescedence as the DDRx registers configuration.
+
+To activate the internal pull-ups resistors the following values are needed.
+
+|------+--------+-----+--------+---------+---------------------------------------------|
+| DDxn | PORTxn | PUD | IO     | Pull-up | Comment                                     |
+|------+--------+-----+--------+---------+---------------------------------------------|
+|    0 |      0 | x   | Input  | No      | Tri-state (Hi-z)                            |
+|    0 |      1 | 0   | Input  | Yes     | Pxn will source current if ext. pulled low. |
+|    0 |      1 | 1   | Input  | No      | Tri-state (Hi-z)                            |
+|    1 |      0 | x   | Output | No      | Output low (Sink)                           |
+|    1 |      1 | x   | Output | No      | Output high (Source)                        |
+|------+--------+-----+--------+---------+---------------------------------------------|
+
+The MCUCR bits is structured as follows. All bits are initializer with zero.
+
+|---+------+-------+-----+---+---+-------+------|
+| 7 | 6    | 5     | 4   | 3 | 2 | 1     | 0    |
+|---+------+-------+-----+---+---+-------+------|
+|   | BODS | BODSE | PUD |   |   | IVSEL | IVCE |
+|---+------+-------+-----+---+---+-------+------|
+| R | RW   | RW    | RW  | R | R | RW    | RW   |
+|---+------+-------+-----+---+---+-------+------|
+
+If the developer requires the pull-ups internal resistors, set the PUD bit low and the SCL and SDA corresponding PORTxns to 1. The following C line is an example that uses the SCL(PORTC5) and SDA (PORTC4) ports for the Arduino UNO. The last two lines are optional if used when arduino starts because those bits initialize at zero.
+
+#+BEGIN_SRC c :tangle no
+  volatile uint8_t *portc = (unit8_t*) (0x28);
+  volatile uint8_t *ddrc = (uint8_t*) (0x27);
+  volatile uint8_t *pinc = (uint8_t*) (0x26);
+  volatile unti8_t *mcucr = (uint8_t*) (0x55);
+  *portc |= (1<<PORTC5) | (1<<PORTC4);
+  *ddrc &= 0b11101111; // Clear PUD bit (4th bit )
+  *ddrc &= 0b11001111; // Clear DDR5 bit and DDR4 bits
+#+END_SRC
+
+*** Registers
+The following registers is needed for configuring and using the I2C protocol.
+
+**** TWI Bit Rate Register - TWBR
+This register controls the bit rate generator. It is located at 0xB8 and all the bits are R/W and setted initially to zero.
+
+|-------+-------+-------+-------+-------+-------+-------+-------|
+|     7 |     6 |     5 |     4 |     3 |     2 |     1 |     0 |
+|-------+-------+-------+-------+-------+-------+-------+-------|
+| TWBR7 | TWBR6 | TWBR5 | TWBR4 | TWBR3 | TWBR2 | TWBR1 | TWBR0 |
+|-------+-------+-------+-------+-------+-------+-------+-------|
+
+**** TWI Control Register - TWCR
+This register has flags and control the type of signal to send. All its bits is initialized at zero.
+
+|-------+------+-------+-------+------+------+---+------|
+| 7     | 6    | 5     | 4     | 3    | 2    | 1 | 0    |
+|-------+------+-------+-------+------+------+---+------|
+| TWINT | TWEA | TWSTA | TWSTO | TWWC | TWEN | - | TWIE |
+|-------+------+-------+-------+------+------+---+------|
+| RW    | RW   | RW    | RW    | R    | RW   | R | RW   |
+|-------+------+-------+-------+------+------+---+------|
+
+- TWINT :: Interrupt flag. Is set to one by hardware when the TWI module has finished its current job. It has to be cleared by setting a logic one to it.
+- TWEA :: Enable Acknowledgment. Controls the generation of the ACK pulse. Set to one to generate ACK.
+- TWSTA :: Start condition. Set to one to become a master of the bus. The TWI module will wait until the bus is free (a STOP is received).
+- TWSTO :: Stop condition. Set to one to generate a STOP condition. 
+- TWWC :: Write Collision. Is set when attempting when writing to the TWDR register while TWINT bit is low (not ready).
+- TWEN :: TWI Enable. Take control of SCL and SDA pins.
+- TWIE :: Interrupt Enable. Use the interrupt vector if the I bit in SREG is enable and TWINT is setted 1 by the hardware.
+
+When TWEN is setted to one, the TWI module takes control of the SCL and SDA pins of the board.
+
+*TWINT bit will be zero* while sending or receiving data. The status will report a 0xF8 error if it is consulted in the middle of the transmission. 
+  
+**** TWI Status Register - TWSR
+
+|------+------+------+------+------+---+-------+-------|
+|    7 |    6 |    5 |    4 |    3 | 2 |     1 |     0 |
+|------+------+------+------+------+---+-------+-------|
+| TWS7 | TWS6 | TWS5 | TWS4 | TWS3 | - | TWPS1 | TWPS0 |
+|------+------+------+------+------+---+-------+-------|
+|    R |    R |    R |    R |    R | R |    RW |    RW |
+|    1 |    1 |    1 |    1 |    1 | 0 |     0 |     0 |
+|------+------+------+------+------+---+-------+-------|
+
+- TWS7-3 :: Status code.
+- TWPS1-0 :: These bits controls the prescaler.
+
+** SCL Frequency 
+The TWI unit's bitrate generator depends on the TWBR register and the prescaler settings at the TWSR register.
+
+The SCL frequency is calculated using the following formulae:
+
+$$SCL freq = \frac{CPU freq}{16 + 2 (TWBR) \cdot (Prescaler value)}$$
+
+The prescaler value depends on two bits at the TWSR register: TWPS1 and TWPS2. The value can be one taken from these table:
+
+|-------+-------+-----------------|
+| TWPS1 | TWPS2 | Prescaler value |
+|-------+-------+-----------------|
+|     0 |     0 | 1               |
+|     0 |     1 | 4               |
+|     1 |     0 | 16              |
+|     1 |     1 | 64              |
+|-------+-------+-----------------|
+
+
+
+* Header 
+:PROPERTIES:
+:header-args: :comments no :padline yes :tangle i2c.h
+:END:
+
+** License
+#+BEGIN_SRC c
+/* 
+   Copyright 2019 Christian Gimenez
+   
+   Author: Christian Gimenez   
+
+   i2c.h
+   
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation, either version 3 of the License, or
+   (at your option) any later version.
+   
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+   
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+#+END_SRC
+
+** Start header
+Avoid including the header twice.
+#+BEGIN_SRC c
+#ifndef _I2C_H
+#define _I2C_H 1
+#+END_SRC
+
+Include some integer definitions (like ~uint8_t~).
+
+#+BEGIN_SRC c
+#include <stdint.h>
+#+END_SRC
+
+** Define errors values
+
+*** Master Transmitter error codes
+These are the TWI Module error codes used when it is in Master Transmitter (MT) mode.
+
+|--------+------------------------------------------|
+| Number | Name                                     |
+|--------+------------------------------------------|
+|   0x08 | START transmitted                        |
+|   0x10 | Repeated START transmitted               |
+|   0x18 | SLA+W transmitted and ACK received       |
+|   0x20 | SLA+W transmitted and NACK received      |
+|   0x28 | Data byte transmitted. ACK received      |
+|   0x30 | Data byte transmitted. NACK received     |
+|   0x38 | Arbitration lost in SLA+W or data bytes. |
+|--------+------------------------------------------|
+
+#+BEGIN_SRC c
+#define MT_START_TRANSMITTED 0x08
+#define MT_RSTART_TRANSMITTED 0x10
+#define MT_LOST_ERROR 0x38
+#define MT_SLAACK_RECEIVED  0x18
+#define MT_SLANACK_ERROR 0x20
+#define MT_ACK_DATAREC 0x28
+#define MT_NACK_DATAREC 0x30
+#+END_SRC
+
+*** Master Receiver error codes
+These are the TWI Module error codes used when it is in Master Receiver (MR) mode.
+
+|--------+---------------------------------------|
+| Number | Name                                  |
+|--------+---------------------------------------|
+|   0x08 | START Transmitted                     |
+|   0x10 | Repeated START transmitted            |
+|   0x38 | Arbitration lost in SLA+R or NACK bit |
+|   0x40 | SLA+R transmitted and ACK received    |
+|   0x48 | SLA+R transmitted and NACK received   |
+|   0x50 | Data byte received and ACK returned   |
+|   0x58 | Data byte received and NACK returned  |
+|--------+---------------------------------------|
+
+#+BEGIN_SRC c
+#define MR_START_TRANSMITTED 0x08
+#define MR_RSTART_TRANSMITTED 0x10
+#define MR_LOST_ERROR 0x38
+#define MR_SLAACK_RECEIVED  0x40
+#define MR_SLANACK_ERROR 0x48
+#define MR_ACK_DATAREC 0x50
+#define MR_NACK_DATAREC 0x58
+#+END_SRC
+
+** Define functions
+*** Init function
+The I2C needs a prescaler and a baud rate to set to the clock SCL signal. Initialize I2C and configure the Bit Rate Generator module.
+
+- baudrate :: Must be between 0 to 255.
+- prescaler :: Must be between 0 to 4 (0b00 and 0b11).
+
+The SCL frequency is calculated according to the following formulae:
+
+$$SCL freq = \frac{CPU freq}{16 + 2 (TWBR) \cdot (Prescaler value)}$$
+
+#+BEGIN_SRC c
+uint8_t i2c_init(uint8_t baudrate, uint8_t prescaler);
+#+END_SRC
+
+*** Send START function
+
+#+BEGIN_SRC c
+uint8_t i2c_start();
+#+END_SRC
+
+*** Send STOP function
+
+#+BEGIN_SRC c
+uint8_t i2c_stop();
+#+END_SRC
+
+*** Send SLA+R and SLA+W functions
+
+#+BEGIN_SRC c
+uint8_t i2c_sla_r(uint8_t addr);
+uint8_t i2c_sla_w(uint8_t addr);
+#+END_SRC
+
+*** Send Data
+
+#+BEGIN_SRC c
+uint8_t i2c_send(uint8_t data);
+#+END_SRC
+
+*** Receive Data
+Send the data and answer with ACK. If ~send_nack~ parameter is 1, then answer with NACK. A NACK is used for ending the transmission.
+
+#+BEGIN_SRC c
+uint8_t i2c_receive(uint8_t *data, uint8_t send_nack);
+#+END_SRC
+
+*** Send ACK 
+
+#+BEGIN_SRC c
+
+#+END_SRC
+
+
+*** Send NACK
+
+** End header
+#+BEGIN_SRC c
+#endif // _I2C_H
+#+END_SRC
+
+
+* Body
+:PROPERTIES:
+:header-args: :comments no :padline yes :tangle i2c.c
+:END:
+
+Include the definitions of this body file.
+
+#+BEGIN_SRC c
+#include "i2c.h"
+#+END_SRC
+
+Include some integers definitions like ~uint8_t~.
+
+#+BEGIN_SRC c
+#include <stdint.h>
+#+END_SRC
+
+Include definition of Arduino's ports and bits names.
+
+#+BEGIN_SRC c
+#include <avr/io.h>
+#+END_SRC
+
+** Structures
+Map the I2C registers to this structure. 
+
+#+BEGIN_SRC c
+typedef struct {
+  uint8_t bit_rate;     // TWRP 0xB8
+  uint8_t status;       // TWSR 0xB9
+  uint8_t address;      // TWAR 0xBA
+  uint8_t data;         // TWDR 0xBB  
+  uint8_t control;      // TWCR 0xBC
+  uint8_t address_mask; // TWAMR 0xBD
+} volatile i2c_t;
+#+END_SRC
+
+Now map the structure with the base address.
+
+#+BEGIN_SRC c
+  volatile i2c_t *i2c = (i2c_t*) (0xb8);
+#+END_SRC
+
+** Auxiliary commands
+
+*** Waiting until the transmission is complete
+This function will make the processor idle until the transmission is complete.
+
+The TWI module set the TWINT bit to zero while the transmission is in process. The hardware will set it to one when it is done. 
+
+#+BEGIN_SRC c
+void wait_trans(){
+  while ((i2c->control & 0x80) != 0);
+}
+#+END_SRC
+
+*** Send ACK and Wait
+When data is arriving, the master must send an ACK for telling the receiver to send another data.
+
+The caller should retrieve the data and check the status control.
+
+#+BEGIN_SRC c
+void ack_and_wait(){
+#+END_SRC
+
+Send an ACK.
+
+#+BEGIN_SRC c
+  i2c->control = (1<<TWINT) | (1<<TWEA) | (1<<TWEN);
+#+END_SRC
+
+Wait until the data is received.
+
+#+BEGIN_SRC c
+  wait_trans();
+#+END_SRC
+
+End function.
+
+#+BEGIN_SRC c
+} // ack_and_wait
+#+END_SRC
+
+** Initialization function
+#+BEGIN_SRC c
+uint8_t i2c_init(uint8_t baudrate, uint8_t prescaler){
+#+END_SRC
+
+Enable the pull-up resistors at the SCL and SDA pins.
+
+#+BEGIN_SRC c
+  volatile uint8_t *portc = (uint8_t*) (0x28);
+  /*
+  volatile uint8_t *ddrc = (uint8_t*) (0x27);
+  volatile uint8_t *pinc = (uint8_t*) (0x26);
+  volatile unti8_t *mcucr = (uint8_t*) (0x55);
+  */
+  *portc |= (1<<PORTC5) | (1<<PORTC4);
+  // *ddrc &= 0b11101111; // Clear PUD bit (4th bit )
+  // *ddrc &= 0b11001111; // Clear DDR5 bit and DDR4 bits
+#+END_SRC
+
+
+Set the baud rate value.
+
+#+BEGIN_SRC c
+i2c->bit_rate = baudrate;
+#+END_SRC
+
+Set the prescaler value. There are two bits at the TWSR: TWSP1 and TWSP2. See the [[*TWI Status Register - TWSR][TWI Status Register - TWSR]] section for the TWSR format.
+
+#+BEGIN_SRC c
+i2c->status = 0b11111100 | (prescaler & 0b00000011);
+#+END_SRC
+
+Enable ACKS and enable TWI module. This will not send any messages because the TWINT is not 1. This code will use polling and interruptions are disabled by default.
+
+#+BEGIN_SRC c
+i2c->control = (1<<TWEA) | (1<<TWEN);
+#+END_SRC
+
+#+BEGIN_SRC c
+} // i2c_init
+#+END_SRC
+
+
+** Send START function
+Set the TWINT to 1 (reset the TWINT). Enable the TWI module and request the start by setting the TWSTA to 1.
+
+|-------+------+-------+-------+------+------+---+------|
+| TWINT | TWEA | TWSTA | TWSTO | TWWC | TWEN | - | TWIE |
+|-------+------+-------+-------+------+------+---+------|
+|     1 | x    |     1 |     0 | x    |    1 | 0 | x    |
+|-------+------+-------+-------+------+------+---+------|
+
+#+BEGIN_SRC c
+uint8_t i2c_start(){
+#+END_SRC
+
+Set the bits to the control register.
+
+#+BEGIN_SRC c
+i2c->control =  (1<<TWINT) | (1<<TWSTA) | (1<<TWEN);
+#+END_SRC
+
+Wait until the start is transmitted.
+
+#+BEGIN_SRC c
+while ((i2c->control & 0x80) == 0);
+#+END_SRC
+
+Return the status register.
+
+#+BEGIN_SRC c
+return i2c->status;
+} // i2c_start
+#+END_SRC
+
+** Send STOP function 
+Send the stop to free the I2C bus. This is accomplished by setting the following bits at the TWCR register.
+
+|-------+------+-------+-------+------+------+---+------|
+| TWINT | TWEA | TWSTA | TWSTO | TWWC | TWEN | - | TWIE |
+|-------+------+-------+-------+------+------+---+------|
+|     1 | x    |     0 |     1 | x    |    1 | 0 | x    |
+|-------+------+-------+-------+------+------+---+------|
+
+#+BEGIN_SRC c
+uint8_t i2c_stop(){
+  i2c->control =  (1<<TWINT) | (1<<TWSTO) | (1<<TWEN);
+  while ((i2c->control & 0x80) != 0);
+  return i2c->status;
+} // i2c_stop
+#+END_SRC
+
+** Send SLA+R function
+Send the SLA+R with a specified slave address. Use 0x00 for broadcasting. When the receiver answers, then the TWI module could have one of the following status codes: 
+
+|------+----------------------------------------------------|
+| 0x38 | Arbitration lost in SLA+R                          |
+| 0x40 | SLA+R has been transmitted; ACK has been received  |
+| 0x48 | SLA+R has been transmitted; NACK has been received |
+|------+----------------------------------------------------|
+
+Set the following bits to send the SLA+R. The TWDR must have the 7 bits of the slave address plus the bit 0 at value 1 (read).
+
+|-------+------+-------+-------+------+------+---+------|
+| TWINT | TWEA | TWSTA | TWSTO | TWWC | TWEN | - | TWIE |
+|-------+------+-------+-------+------+------+---+------|
+|     1 | x    |     0 |     0 | x    |    1 | 0 | x    |
+|-------+------+-------+-------+------+------+---+------|
+
+The function will use the 6 higher bits of the ~addr~ parameter.
+
+#+BEGIN_SRC c
+uint8_t i2c_sla_r(uint8_t addr){
+#+END_SRC
+
+Set the slave device address. Also, set the last bit to 1 to indicate a reading transmission.
+
+#+BEGIN_SRC c
+i2c->data = addr | 0x01;
+i2c->control = (1<<TWINT) | (1<<TWEN);
+#+END_SRC
+
+Wait until the transmission is complete.
+
+#+BEGIN_SRC c
+while ((i2c->control & 0x80) == 0);
+#+END_SRC
+
+Return the status code. See [[*Master Receiver error codes][Master Receiver error codes]] section for a list of return values and their meanings.
+
+#+BEGIN_SRC c
+  return i2c->status;
+} // i2c_sla_r
+#+END_SRC
+
+
+** Send SLA+W function
+Same as SLA+R but change the data last bit to 0.
+
+#+BEGIN_SRC c
+uint8_t i2c_sla_w(uint8_t addr){
+  i2c->data = addr & 0b11111110;
+  i2c->control = (1<<TWINT) | (1<<TWEN);
+  while ((i2c->control & 0x80) == 0);
+  return i2c->status;
+} // i2c_sla_w
+#+END_SRC
+
+** Send data
+Sending data involves sending each bit through the SLA channel, one per SLC clock (SLA must be high or low before and during the SLC clock is high).
+
+The TWI module expcet the data at the TWDR and the TWCR must be at this value:
+
+|-------+------+-------+-------+------+------+---+------|
+| TWINT | TWEA | TWSTA | TWSTO | TWWC | TWEN | - | TWIE |
+|-------+------+-------+-------+------+------+---+------|
+|     1 | x    |     0 |     0 | x    |    1 | 0 | x    |
+|-------+------+-------+-------+------+------+---+------|
+
+#+BEGIN_SRC c
+uint8_t i2c_send(uint8_t data){
+#+END_SRC
+
+Avoid writing the data at the TWDR when TWINT bit is low. If this happens the TWWC (Write Collision) bit is setted to one and the data will be lost.
+
+#+BEGIN_SRC c
+  while ((i2c->control & 0x80) == 0);
+#+END_SRC
+
+Set the data at the data register and set the control register to send it.
+
+#+BEGIN_SRC c
+  i2c->data = data;
+  i2c->control = (1<<TWINT) | (1<<TWEN);
+#+END_SRC
+
+Wait until the data transfer is complete.
+
+#+BEGIN_SRC c
+  while ((i2c->control & 0x80) == 0);
+#+END_SRC
+
+Return status code and end function. See [[*Master Transmitter error codes][Master Transmitter error codes]] for a list of return values and their meanings.
+
+#+BEGIN_SRC c
+  return i2c->status;
+} // i2c_send
+#+END_SRC
+
+** Receive data
+After sending the SLA+R and receiving an ACK (a status code of 0x40 = ~MR_ACK_RECEIVED~ for the TWI module), the data is transfered from the slave to the master. Each byte of data must be acknowledged by the master. After the last data has been received, the master must send a NACK signal to the slave to stop the transmission.
+
+The TWI module will set the TWINT bit to one each time a data is received and is available at the TWDR (data register).
+
+#+BEGIN_SRC c
+uint8_t i2c_receive(uint8_t *data, uint8_t send_nack){
+#+END_SRC
+
+Set the ACK bit to zero if ~send_nack~ is 1.
+
+#+BEGIN_SRC c
+if (send_nack){
+  i2c->control &= 0b10111111;
+}else{
+  i2c->control |= (1<<TWEA);
+}
+#+END_SRC
+
+Ensure the TWINT bit is one.
+
+#+BEGIN_SRC c
+  while ((i2c->control & 0x80) == 0);
+#+END_SRC
+
+Set the data value to the output parameter.
+
+#+BEGIN_SRC c
+  *data = i2c->data;
+#+END_SRC
+
+Return the status code. End function.
+
+#+BEGIN_SRC c
+  return i2c->status;
+} // i2c_receive
+#+END_SRC
+
+
+ 
+
+
+* Meta     :noexport:
+
+  # ----------------------------------------------------------------------
+  #+TITLE:  I2C Implementation
+  #+AUTHOR: Christian Gimenez
+  #+DATE:   03 jul 2019
+  #+EMAIL:
+  #+DESCRIPTION: 
+  #+KEYWORDS: 
+
+  #+STARTUP: inlineimages hidestars content hideblocks entitiespretty indent fninline latexpreview
+  #+TODO: TODO(t!) CURRENT(c!) PAUSED(p!) | DONE(d!) CANCELED(C!@)
+  #+OPTIONS:   H:3 num:t toc:t \n:nil @:t ::t |:t ^:{} -:t f:t *:t <:t
+  #+OPTIONS:   TeX:t LaTeX:t skip:nil d:nil todo:t pri:nil tags:not-in-toc tex:imagemagick
+  #+LINK_UP:   
+  #+LINK_HOME: 
+  #+XSLT:
+
+  # -- HTML Export
+  #+INFOJS_OPT: view:info toc:t ftoc:t ltoc:t mouse:underline buttons:t path:libs/org-info.js
+  #+EXPORT_SELECT_TAGS: export
+  #+EXPORT_EXCLUDE_TAGS: noexport
+  #+HTML_LINK_UP: index.html
+  #+HTML_LINK_HOME: index.html
+
+  # -- For ox-twbs or HTML Export
+  #+HTML_HEAD: <link href="libs/bootstrap.min.css" rel="stylesheet">
+  #+HTML_HEAD: <script src="libs/jquery.min.js"></script> 
+  #+HTML_HEAD: <script src="libs/bootstrap.min.js"></script>
+  #+LANGUAGE: en
+
+  # Local Variables:
+  # org-hide-emphasis-markers: t
+  # org-use-sub-superscripts: "{}"
+  # fill-column: 80
+  # visual-line-fringe-indicators: t
+  # ispell-local-dictionary: "british"
+  # End:
