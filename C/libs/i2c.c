@@ -16,7 +16,7 @@ typedef struct {
 volatile i2c_t *i2c = (i2c_t*) (0xb8);
 
 void wait_trans(){
-  while ((i2c->control & 0x80) != 0);
+  while ((i2c->control & 0x80) == 0);
 }
 
 void ack_and_wait(){
@@ -49,7 +49,7 @@ i2c->control = (1<<TWEA) | (1<<TWEN);
 
 uint8_t i2c_start(){
 
-i2c->control =  (1<<TWINT) | (1<<TWSTA) | (1<<TWEN);
+i2c->control =  (1<<TWINT) | (1<<TWEA) | (1<<TWSTA) | (1<<TWEN);
 
 while ((i2c->control & 0x80) == 0);
 
@@ -58,7 +58,7 @@ return i2c->status;
 
 uint8_t i2c_stop(){
   i2c->control =  (1<<TWINT) | (1<<TWSTO) | (1<<TWEN);
-  while ((i2c->control & 0x80) != 0);
+  // while ((i2c->control & 0x80) == 0);
   return i2c->status;
 } // i2c_stop
 
@@ -103,5 +103,6 @@ while ((i2c->control & 0x80) == 0);
 
 *data = i2c->data;
 
-return i2c->status;
+i2c->control |= (1<<TWEA);
+  return i2c->status;
 } // i2c_receive

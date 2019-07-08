@@ -390,7 +390,7 @@ The TWI module set the TWINT bit to zero while the transmission is in process. T
 
 #+BEGIN_SRC c
 void wait_trans(){
-  while ((i2c->control & 0x80) != 0);
+  while ((i2c->control & 0x80) == 0);
 }
 #+END_SRC
 
@@ -477,10 +477,10 @@ Set the TWINT to 1 (reset the TWINT). Enable the TWI module and request the star
 uint8_t i2c_start(){
 #+END_SRC
 
-Set the bits to the control register.
+Set the bits to the control register. Send ACK if something is returned in next I2C steps.
 
 #+BEGIN_SRC c
-i2c->control =  (1<<TWINT) | (1<<TWSTA) | (1<<TWEN);
+i2c->control =  (1<<TWINT) | (1<<TWEA) | (1<<TWSTA) | (1<<TWEN);
 #+END_SRC
 
 Wait until the start is transmitted.
@@ -508,7 +508,7 @@ Send the stop to free the I2C bus. This is accomplished by setting the following
 #+BEGIN_SRC c
 uint8_t i2c_stop(){
   i2c->control =  (1<<TWINT) | (1<<TWSTO) | (1<<TWEN);
-  while ((i2c->control & 0x80) != 0);
+  // while ((i2c->control & 0x80) == 0);
   return i2c->status;
 } // i2c_stop
 #+END_SRC
@@ -641,9 +641,10 @@ Set the data value to the output parameter.
   *data = i2c->data;
 #+END_SRC
 
-Return the status code. End function.
+Return the status code. End function. Restore the TWEA bit to one.
 
 #+BEGIN_SRC c
+  i2c->control |= (1<<TWEA);
   return i2c->status;
 } // i2c_receive
 #+END_SRC
