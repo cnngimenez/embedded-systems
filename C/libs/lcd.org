@@ -413,7 +413,7 @@ First, reverse the bits. After this instruction, the left 4 bits is at the right
 uint8_t binr = reverse(bits);
 #+END_SRC
 
-Set the port D bits. D7-4 is assingned from PD2-5 so a displacement must be done according to which four bits is going to be used..
+Set the port D bits. D7-4 is assingned from PD2-5 so a displacement must be done according to which four bits is going to be used.
 
 | /            | <   |     |     |     |     |     |     | >   |
 |--------------+-----+-----+-----+-----+-----+-----+-----+-----|
@@ -423,11 +423,13 @@ Set the port D bits. D7-4 is assingned from PD2-5 so a displacement must be done
 | Values       | 0   |   0 | 1   | 1   | 0   | 0   |   0 | 0   |
 |--------------+-----+-----+-----+-----+-----+-----+-----+-----|
 
+Remember to preserve the other bits in case they are used with other purposes. This accomplished by masking the ~*portd~ value with the unused bits (in this case ~*portd & 0b11000011~ for preserving the 7, 6, 1 and 0 bits).  
+
 #+BEGIN_SRC c
   if (use_left == 1){
-    ,*portd = 0b00111100 & (binr<<2);
+    ,*portd = (*portd & 0b11000011) | (0b00111100 & (binr<<2));
    }else{
-    ,*portd = 0b00111100 & (binr>>2);
+    ,*portd = (*portd & 0b11000011) | (0b00111100 & (binr>>2));
    }
 #+END_SRC
 

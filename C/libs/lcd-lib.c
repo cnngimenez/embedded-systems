@@ -73,9 +73,9 @@ void set_data_bits(uint8_t bits, uint8_t use_left){
 uint8_t binr = reverse(bits);
 
 if (use_left == 1){
-  *portd = 0b00111100 & (binr<<2);
+  *portd = (*portd & 0b11000011) | (0b00111100 & (binr<<2));
  }else{
-  *portd = 0b00111100 & (binr>>2);
+  *portd = (*portd & 0b11000011) | (0b00111100 & (binr>>2));
  }
 
 } // send_data_bits
