@@ -1,4 +1,4 @@
-#+PROPERTY: header-args :comments no :padline yes :tangle usart-lib.asm
+#+PROPERTY: header-args :comments org :padline yes :tangle usart-lib.asm
 
 For sending a value to a computer, a serial connection based on the USART protocol will be used.
 
