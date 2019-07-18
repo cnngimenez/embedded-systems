@@ -1,0 +1,471 @@
+#+PROPERTY: header-args :comments org :padline yes :tangle main.asm :mkdirp yes
+
+The following program tests the Arduino sleep modes. These modes is used for reducing power by turning oscilators and clocks off.
+
+The AVR will send an "S" to the USART and turn on the L led before entering the sleep state. Then, it will wake up when the pin A0 receives a signal. When this happens, it will send a "W" character to the USART and turn off the L led. This procedure repeats itself indefinitely.
+
+
+* Introduction
+The AVR provides various sleep modes allowing the user to tailor the power consumption. A sleep mode should be selected according to the required active clock domains and the wake-up sources.
+
+
+** Sleep Modes
+The following table display all the sleep modes and the enabled clocks.
+
+|------------------+-----+-------+----+-----+-----+------------+------------|
+| Modes            | CPU | FLASH | IO | ADC | ASY | Main Clock | Timer Osc. |
+|------------------+-----+-------+----+-----+-----+------------+------------|
+| IDLE             |     |       | X  | X   | X   | X          | X          |
+| ADCNRM           |     |       |    | X   | X   | X          | X          |
+| Power-down       |     |       |    |     |     |            |            |
+| Power-save       |     |       |    |     | X   |            | X          |
+| Standby          |     |       |    |     |     | X          |            |
+| Extended Standby |     |       |    |     | X   | X          | X          |
+|------------------+-----+-------+----+-----+-----+------------+------------|
+
+The wake-up sources are determined as follows.
+
+|------------------+--------+-----+---------+-----+-----+-----+-----------|
+| Modes            | INT7:0 | TWI | Timer 2 | SPM | ADC | WDT | Other I/O |
+|------------------+--------+-----+---------+-----+-----+-----+-----------|
+| IDLE             | X      | X   | X       | X   | X   | X   | X         |
+| ADCNRM           | X      | X   | X       | X   | X   | X   |           |
+| Power-down       | X      | X   |         |     |     | X   |           |
+| Power-save       | X      | X   | X       |     |     | X   |           |
+| Standby          | X      | X   |         |     |     | X   |           |
+| Extended Standby | X      | X   | X       |     |     | X   |           |
+|------------------+--------+-----+---------+-----+-----+-----+-----------|
+
+- INT7:0 :: When the interruptions 7 to 0 or any pin changes its status.
+- TWI :: When the TWI address matches.
+- SPM :: When the SPM or EEPROM is ready.
+- WDT :: When the watchdog timer interrupts.
+
+** Registers
+
+*** Sleep Mode Control Register - SMCR 
+The SMCR is at address 0x53 in the memory (0x33 in I/O port). All the bits are initialized as zero.
+
+
+| 7 | 6 | 5 | 4 | 3   | 2   | 1   | 0  |
+|---+---+---+---+-----+-----+-----+----|
+|   |   |   |   | SM2 | SM1 | SM0 | SE |
+| R | R | R | R | RW  | RW  | RW  | RW |
+|---+---+---+---+-----+-----+-----+----|
+
+- SM2:0 :: Sleep Mode select bits.
+- SE :: Sleep Enable. Enable the ~sleep~ instruction to sleep the MCU. 
+
+It is recommended that the SE bit is setted at one just before the sleep execution, and cleared it inmediately.
+
+The Sleep Mode bits are defined as follows:
+
+|-----+-----+-----+---------------------|
+| SM2 | SM1 | SM0 | Sleep Mode          |
+|-----+-----+-----+---------------------|
+|   0 |   0 |   0 | Idle                |
+|   0 |   0 |   1 | ADC Noise Reduction |
+|   0 |   1 |   0 | Power-down          |
+|   0 |   1 |   1 | Power-save          |
+|   1 |   0 |   0 | Reserved            |
+|   1 |   0 |   1 | Reserved            |
+|   1 |   1 |   0 | Standby             |
+|   1 |   1 |   1 | Extended Standby    |
+|-----+-----+-----+---------------------|
+
+** Select the Sleep Mode
+To select the sleep mode set the SM2:0 bits. The following code shows how to select the extended standby mode. Do not set the SE bit which is in the same register.
+
+#+BEGIN_SRC asm :tangle no
+    ldi r16, 0b00001110
+    sts SMCR, r16
+#+END_SRC
+
+** Start the Sleep Mode
+To start the sleep mode, set the SE bit to one and call the ~sleep~ command. After returning from the sleeping state, set the SE bit to zero.
+
+#+BEGIN_SRC asm :tangle no
+    lds r18, SMCR
+    set
+    bld r18, 0
+    sts SMCR, r18
+
+    sleep
+
+    lds r18, SMCR
+    clt
+    bld r18, 0
+    sts SMCR, r18
+#+END_SRC
+
+Remember to enable the proper interruptions in order to return from the sleeping state.
+
+* Main Program
+
+** License
+#+BEGIN_SRC asm
+;; Copyright 2019 Christian Gimenez
+	   
+;; Author: Christian Gimenez
+
+;; main.asm
+	   
+;; This program is free software: you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
+	   
+;; This program is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+	   
+;; You should have received a copy of the GNU General Public License
+;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#+END_SRC
+
+
+** Include basic files
+Include interruption vectors and add the register names.
+
+#+BEGIN_SRC asm
+.include "../libraries/vector-atmega2560-inc.asm"
+.include "../libraries/registers-atmega2560-inc.asm"
+#+END_SRC
+
+Start the program section.
+
+#+BEGIN_SRC asm
+.text
+#+END_SRC
+
+** Initialization
+#+BEGIN_SRC asm
+RESET:
+#+END_SRC
+
+*** Configure LED Pin for Output 
+The L led will be used for displaying when the ATmega is not sleeping. 
+
+#+BEGIN_SRC asm
+    sbi ODDRB, 7
+#+END_SRC
+
+*** Configure an input pin
+This set the input mode on PIN PB0 (pin 53 in Arduino Mega or pin PWM 8 in Arduino UNO).
+
+#+BEGIN_SRC asm
+    cbi ODDRB, 0
+#+END_SRC
+
+*** Initialize USART
+Call the initialization procedure. 
+
+#+BEGIN_SRC asm
+    rcall USART_INIT
+#+END_SRC
+
+*** Sleep mode
+Set the Extended Standby sleep mode. SM2:0 bits must be at 111.
+
+#+BEGIN_SRC asm
+    ldi r16, 0b00001110
+    sts SMCR, r16
+#+END_SRC
+
+*** Configure interruptions
+The following section shows how to activate all interruptions. However, only one input pin will be used (PIN PB0), and thus, only one code is exported to the library.
+
+The I-bit will be setted latter when entering the sleeping mode.
+
+Coincidentally, the PB0 pin is the same as the PCINT0 interruption pin at the Arduino MEGA board.
+
+**** External Interrupt Control Register A - EICRA
+This code enables all external interruptions for pins INT3:0. It will be triggered when a rising edge (0b11 per pair of bits) generate an interrupt.
+
+#+BEGIN_SRC asm :tangle no
+    ldi r16, 0b11111111
+    sts EICRA, r16
+#+END_SRC
+
+**** EICRB
+The following snippet enables all external interruptions for pins INT7:4.
+
+#+BEGIN_SRC asm :tangle no
+    ldi r16, 0b11111111
+    sts EICRB, r16
+#+END_SRC
+
+**** External Interrupt Mask Register - EIMSK
+The EICRA and EICRB determine when the interruption will be triggered. This register dictates which pins are allowed to active the interruption.
+
+The following code example activates all of them.
+
+#+BEGIN_SRC asm :tangle no
+    ldi r16, 0xff
+    sts EIMSK, r16
+#+END_SRC
+
+**** Pin Change Interrupt Control Register - PCICR 
+Enable all interruptions. Specially, the PCIE0 bit which corresponds to the PB0/PCINT0 pin. Basically, activate the PCMSKn group of bits.
+
+#+BEGIN_SRC asm
+    ldi r16, 0b00000001
+    sts PCICR, r16
+#+END_SRC
+
+**** Pin Change Mask Register 0 - PCMSK0
+This select the pins that can trigger an interruption. PCICR first bit must be 1. 
+
+This affects PCINT7:0 pins. Only the PB0/PCINT0 pin is needed to be activated.
+
+#+BEGIN_SRC asm
+    ldi r16, 0b00000001
+    sts PCMSK0, r16
+#+END_SRC
+
+**** PCMSK1
+This code activates interruptions for pins PCINT15:8.
+
+#+BEGIN_SRC asm :tangle no
+    ldi r16, 0xff
+    sts PCMSK1, r16
+#+END_SRC
+
+**** PCMSK2
+The following code activates interruptions for pins PCINT16:23.
+
+#+BEGIN_SRC asm :tangle no
+    ldi r16, 0xff
+    sts PCMSK2, r16
+#+END_SRC
+
+*** Send a signal
+To test that the board is initializing, send a signal.
+
+Turn on the L led and turn it off.
+
+#+BEGIN_SRC asm
+    sbi OPORTB, 7
+    ldi r16, 0x05
+    rcall WAIT
+    cbi OPORTB, 7
+    ldi r16, 0x05
+    rcall WAIT
+    sbi OPORTB, 7
+    ldi r16, 0x05
+    rcall WAIT
+#+END_SRC
+
+Send a hello.
+
+#+BEGIN_SRC asm
+    ldi r18, 'H'
+    rcall USART_PUT
+    rcall WAIT
+#+END_SRC
+
+
+** Sleep Loop
+Declare the label to return to.
+
+#+BEGIN_SRC asm
+MAIN_LOOP:
+#+END_SRC
+
+Send an "S" to the USART and turn on the L led.
+
+#+BEGIN_SRC asm
+    ldi r18, 's'
+    rcall USART_PUT
+    ldi r16, 0x05
+    rcall WAIT
+    sbi OPORTB, 7
+#+END_SRC
+
+Enable interruptions.
+
+#+BEGIN_SRC asm
+    sei
+#+END_SRC
+
+Send the sleep command to the AVR.
+
+#+BEGIN_SRC asm
+    lds r18, SMCR
+    set
+    bld r18, 0
+    sts SMCR, r18
+
+    sleep
+#+END_SRC
+
+When returning from sleeping disable sleep mode, disable interruptions and  notify the user. Turn off the L led and send a "W" using the USART protocol.
+
+#+BEGIN_SRC asm
+    lds r18, SMCR
+    clt 
+    bld r18, 0
+    sts SMCR, r18
+
+    cli
+
+    ldi r18, 'w'
+    rcall USART_PUT
+    ldi r16, 0x05
+    rcall WAIT
+
+    cbi OPORTB, 7
+#+END_SRC
+
+Check if the PINB0 was the reason.
+
+#+BEGIN_SRC asm
+    sbrc r20, 0
+    rjmp 1f
+    ldi r18, '0'
+    rcall USART_PUT
+1:
+#+END_SRC
+
+
+Wait a little.
+
+#+BEGIN_SRC asm
+    ldi r16, 0x05
+    rcall WAIT
+#+END_SRC
+
+Return to the main loop.
+
+#+BEGIN_SRC asm
+    rjmp MAIN_LOOP
+#+END_SRC
+
+* Vector Handlers
+
+#+BEGIN_SRC asm
+INT0:        ; IRQ0 Handler 
+INT1:        ; IRQ1 Handler 
+INT2:        ; IRQ2 Handler 
+INT3:        ; IRQ3 Handler 
+INT4:        ; IRQ4 Handler 
+INT5:        ; IRQ5 Handler 
+INT6:        ; IRQ6 Handler 
+INT7:        ; IRQ7 Handler 
+PCINT0:      ; PCINT0 Handler 
+    set
+    bld r20, 0
+PCINT1:      ; PCINT1 Handler 
+PCINT2:      ; PCINT2 Handler 
+WD:          ; Watchdog Timeout Handler 
+TIM2_COMPA:  ; Timer2 CompareA Handler 
+TIM2_COMPB:  ; Timer2 CompareB Handler 
+TIM2_OVF:    ; Timer2 Overflow Handler 
+TIM1_CAPT:   ; Timer1 Capture Handler 
+TIM1_COMPA:  ; Timer1 CompareA Handler 
+TIM1_COMPB:  ; Timer1 CompareB Handler 
+TIM1_COMPC:  ; Timer1 CompareC Handler 
+TIM1_OVF:    ; Timer1 Overflow Handler 
+TIM0_COMPA:  ; Timer0 CompareA Handler 
+TIM0_COMPB:  ; Timer0 CompareB Handler 
+TIM0_OVF:    ; Timer0 Overflow Handler 
+SPI_STC:     ; SPI Transfer Complete Handler 
+USART0_RXC:  ; USART0 RX Complete Handler 
+USART0_UDRE: ; USART0,UDR Empty Handler 
+USART0_TXC:  ; USART0 TX Complete Handler 
+ANA_COMP:    ; Analog Comparator Handler 
+ADC:         ; ADC Conversion Complete Handler 
+EE_RDY:      ; EEPROM Ready Handler 
+TIM3_CAPT:   ; Timer3 Capture Handler 
+TIM3_COMPA:  ; Timer3 CompareA Handler 
+TIM3_COMPB:  ; Timer3 CompareB Handler 
+TIM3_COMPC:  ; Timer3 CompareC Handler 
+TIM3_OVF:    ; Timer3 Overflow Handler 
+USART1_RXC:  ; USART1 RX Complete Handler 
+USART1_UDRE: ; USART1,UDR Empty Handler 
+USART1_TXC:  ; USART1 TX Complete Handler 
+TWI:         ; 2-wire Serial Handler 
+SPM_RDY:     ; SPM Ready Handler 
+TIM4_CAPT:   ; Timer4 Capture Handler 
+TIM4_COMPA:  ; Timer4 CompareA Handler 
+TIM4_COMPB:  ; Timer4 CompareB Handler 
+TIM4_COMPC:  ; Timer4 CompareC Handler 
+TIM4_OVF:    ; Timer4 Overflow Handler 
+TIM5_CAPT:   ; Timer5 Capture Handler 
+TIM5_COMPA:  ; Timer5 CompareA Handler 
+TIM5_COMPB:  ; Timer5 CompareB Handler 
+TIM5_COMPC:  ; Timer5 CompareC Handler 
+TIM5_OVF:    ; Timer5 Overflow Handler 
+USART2_RXC:  ; USART2 RX Complete Handler 
+USART2_UDRE: ; USART2,UDR Empty Handler 
+USART2_TXC:  ; USART2 TX Complete Handler 
+USART3_RXC:  ; USART3 RX Complete Handler 
+USART3_UDRE: ; USART3,UDR Empty Handler 
+USART3_TXC:  ; USART3 TX Complete Handler 		
+#+END_SRC
+
+
+#+BEGIN_SRC asm
+;; __________________________________________________
+    reti
+END:
+    nop
+    break
+    rjmp END
+#+END_SRC
+
+* Include libraries
+Include the USART library. It is explained at [[file:../libraries/usart-lib.org][USART lib page]].
+
+#+BEGIN_SRC asm
+.include "../libraries/usart-lib.asm"
+#+END_SRC
+
+Include a wait subroutine. See the [[file:../libraries/wait-lib.org][Wait library page]] for more information.
+
+#+BEGIN_SRC asm
+.include "../libraries/wait-lib.asm"
+#+END_SRC
+
+
+
+* Meta     :noexport:
+
+  # ----------------------------------------------------------------------
+  #+TITLE:  Power Management
+  #+AUTHOR: Christian Gimenez
+  #+DATE:   16 jul 2019
+  #+EMAIL:
+  #+DESCRIPTION: 
+  #+KEYWORDS: 
+
+  #+STARTUP: inlineimages hidestars content hideblocks entitiespretty indent fninline latexpreview
+  #+TODO: TODO(t!) CURRENT(c!) PAUSED(p!) | DONE(d!) CANCELED(C!@)
+  #+OPTIONS:   H:3 num:t toc:t \n:nil @:t ::t |:t ^:{} -:t f:t *:t <:t
+  #+OPTIONS:   TeX:t LaTeX:t skip:nil d:nil todo:t pri:nil tags:not-in-toc tex:imagemagick
+  #+LINK_UP:   
+  #+LINK_HOME: 
+  #+XSLT:
+
+  # -- HTML Export
+  #+INFOJS_OPT: view:info toc:t ftoc:t ltoc:t mouse:underline buttons:t path:libs/org-info.js
+  #+EXPORT_SELECT_TAGS: export
+  #+EXPORT_EXCLUDE_TAGS: noexport
+  #+HTML_LINK_UP: index.html
+  #+HTML_LINK_HOME: index.html
+
+  # -- For ox-twbs or HTML Export
+  #+HTML_HEAD: <link href="libs/bootstrap.min.css" rel="stylesheet">
+  #+HTML_HEAD: <script src="libs/jquery.min.js"></script> 
+  #+HTML_HEAD: <script src="libs/bootstrap.min.js"></script>
+  #+LANGUAGE: en
+
+  # Local Variables:
+  # org-hide-emphasis-markers: t
+  # org-use-sub-superscripts: "{}"
+  # fill-column: 80
+  # visual-line-fringe-indicators: t
+  # ispell-local-dictionary: "british"
+  # org-src-preserve-indentation: t
+  # End:
