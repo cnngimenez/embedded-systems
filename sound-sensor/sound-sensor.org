@@ -1,4 +1,4 @@
-#+PROPERTY: header-args :comments no :padline yes :tangle main.asm 
+#+PROPERTY: header-args :comments org :padline yes :tangle main.asm 
 
 There are three important registers for the ADC:
 

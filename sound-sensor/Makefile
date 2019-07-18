@@ -23,7 +23,7 @@ F_CPU=16000000UL
 # --------------------------------------------------
 
 # Port to use
-PORT=/dev/ttyUSB1
+PORT=/dev/ttyUSB0
 # Type of MCU connected to the programmer
 # PARTNO=atmega2560
 PARTNO=atmega328p
@@ -31,7 +31,8 @@ PARTNO=atmega328p
 # PROGID=wiring
 PROGID=arduino
 # Baud rate
-BAUD=115200
+# BAUD=115200
+BAUD=57600
 # Linking Mode to use
 # LD_MODE=avr6
 LD_MODE=avr5
