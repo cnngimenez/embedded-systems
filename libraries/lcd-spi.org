@@ -664,6 +664,86 @@ Send the command following command:
 #+END_SRC
 
 
+** TODO Set GDRAM Address
+- State "TODO"       from              [2019-08-14 Wed 13:26]
+
+- r16 :: Vertical address (from 6th to 0 bits)
+- r17 :: Horizontal address (from 4th to 0bits)
+
+** TODO Set GDRAM Value
+- State "TODO"       from              [2019-08-14 Wed 13:26]
+
+** TODO Cursor Control Command
+** Home Command
+Define the ~LCD_HOME~ subroutine. No parameters are needed.
+
+The LCD home command has got the following structure:
+
+|----+----+-----+-----+-----+-----+-----+-----+-----+-----|
+| RS | RW | DB7 | DB6 | DB5 | DB4 | DB3 | DB2 | DB1 | DB0 |
+|----+----+-----+-----+-----+-----+-----+-----+-----+-----|
+|  0 |  0 |   0 |   0 |   0 |   0 |   0 |   0 |   1 | X   |
+|----+----+-----+-----+-----+-----+-----+-----+-----+-----|
+
+*** Begin subroutine
+#+BEGIN_SRC asm
+LCD_HOME:
+    push r16
+    push r17
+#+END_SRC
+
+*** Send the command
+#+BEGIN_SRC asm
+    ldi r16, 0x02
+    ldi r17, 0x00
+    rcall LCD_INST
+#+END_SRC
+
+
+*** End Subroutine
+#+BEGIN_SRC asm
+    pop r17
+    pop r16
+    ret
+#+END_SRC
+
+** Clear Command
+Define the ~LCD_CLEAR~ subroutine. No parameters are needed.
+
+The LCD clear command has got the following structure:
+
+|----+----+-----+-----+-----+-----+-----+-----+-----+-----|
+| RS | RW | DB7 | DB6 | DB5 | DB4 | DB3 | DB2 | DB1 | DB0 |
+|----+----+-----+-----+-----+-----+-----+-----+-----+-----|
+|  0 | 0  | 0   | 0   | 0   | 0   | 0   | 0   | 0   | 1   |
+|----+----+-----+-----+-----+-----+-----+-----+-----+-----|
+
+*** Begin subroutine
+#+BEGIN_SRC asm
+LCD_CLEAR:
+    push r16
+    push r17
+#+END_SRC
+
+*** Send the command
+#+BEGIN_SRC asm
+    ldi r16, 0x01
+    ldi r17, 0x00
+    rcall LCD_INST
+#+END_SRC
+
+*** End Subroutine
+#+BEGIN_SRC asm
+    pop r17
+    pop r16
+    ret
+#+END_SRC
+
+
+** TODO Display Status Command
+** TODO Function Set Command
+The extended function set command is the same but provides the Graphic Display (DB1) bit.
+
 * Test
 :PROPERTIES:
 :header-args: :comments no :padline yes :mkdirp t :tangle tests/lcd/lcd-send.asm
@@ -741,7 +821,7 @@ Set the L led (PB7) to output mode. Turn on and off.
     cbi OPORTB, 7
 #+END_SRC
 
-*** LCD 
+*** LCD
 #+BEGIN_SRC asm
     rcall LCD_INIT
 #+END_SRC
