@@ -5,9 +5,9 @@ FILE=main
 # --------------------------------------------------
 
 # Instruction set architecture (ISA):
-# MMCU=atmega2560
+MMCU=atmega2560
 # MMCU=atmega328p
-MMCU=avr5
+# MMCU=avr5
 
 # Optimizations (For debugging with simavr you should deactivate this)
 # OPT=-Os
@@ -23,19 +23,20 @@ F_CPU=16000000UL
 # --------------------------------------------------
 
 # Port to use
-PORT=/dev/ttyUSB0
+#PORT=/dev/ttyUSB0
+PORT=/dev/ttyACM0
 # Type of MCU connected to the programmer
-# PARTNO=atmega2560
-PARTNO=atmega328p
+PARTNO=atmega2560
+# PARTNO=atmega328p
 # Programmer id
-# PROGID=wiring
-PROGID=arduino
+PROGID=wiring
+# PROGID=arduino
 # Baud rate
-# BAUD=115200
-BAUD=57600
+BAUD=115200
+# BAUD=57600
 # Linking Mode to use
-# LD_MODE=avr6
-LD_MODE=avr5
+LD_MODE=avr6
+# LD_MODE=avr5
 
 # 
 # --------------------------------------------------
@@ -44,7 +45,7 @@ LD_MODE=avr5
 all:
 # avr-gcc $(OPT) -DF_CPU=$(F_CPU) -mmcu=$(MMCU) $(INCLUDES) -o $(FILE).elf $(FILE).c
 	avr-as -g -mmcu=$(MMCU) -o $(FILE).o $(FILE).asm
-	avr-ld -g -m$(LD_MODE) -Tdata=0x800100 -o $(FILE).elf $(FILE).o
+	avr-ld -g -m$(LD_MODE) -Tdata=0x802000 -o $(FILE).elf $(FILE).o
 	avr-objcopy -g -O ihex -R .eeprom $(FILE).elf $(FILE).hex
 
 install: all

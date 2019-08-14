@@ -1,10 +1,25 @@
 #+PROPERTY: header-args :comments org :padline yes :tangle main.asm 
 
+
+* Introduction
+The Analog-to-Digital Converter (ADC) module converts an analog input voltage to a 10-bit digital value through successive approximations. The minimum value is GND and the maximum represent the voltage on the AREF pin minus 1 LSB. 
+
+** Block Diagram
+The following is the ADC module's block diagram. It is an extraction from the ATmega 238P datasheet.
+
+The registers available are those connected at the 8-bit data bus. These are used for controlling the ADC conversion procedure.
+
+[[file:imgs/adc-block-diagram-small.png]]
+
+** Registers
 There are three important registers for the ADC:
 
 - ADMUX :: Input selection or "multiplexor"
 - ADCSRA :: Status and control
 - ADC :: Data registers
+
+** Vin Reference
+
 
 * Include needed files
 #+BEGIN_SRC asm
@@ -118,7 +133,7 @@ Test sending a "hello". Take the pointer from the string memory and send it to t
    there is a 100nF capacitor connected to the AREF pin which is required to reduce the noise. If REFS is setted with any of the modes, then, there is no need to use any other capacitor.
 
    #+caption: Schematic section that shows the capacitor attached to the AREF pin. label:fig:aref-capacitor
-   [[file:aref-capacitor.png]]
+   [[file:imgs/aref-capacitor.png]]
 
    Which value is best? Sensors may work with different voltages, and maybe not 1.1V. Thus, test the voltage output at the analog of the sensor and try to make a huge noise to see which is the maximum wanted. Take note of voltages for minimum and maximum and use that as input for AREF.
 
