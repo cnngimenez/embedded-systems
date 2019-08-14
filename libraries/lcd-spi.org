@@ -1,0 +1,1135 @@
+#+PROPERTY: header-args :tangle lcd-spi-lib.asm :padline yes :comments org
+
+* Introduction
+  The following library use an SPI connection to control a 128x64 LCD. In this case, the display has got an ST7920 controller chip. 
+
+  The ST7920 support the following RAMs which they are used for different characters types.
+  
+** The LCD Module
+   The module has got an ST7920 controller. It needs 2.2 to 5V to work properly. The LCD module is displayed at Figure ref:fig-lcd. 
+
+   #+caption: The LCD module with ST7920 controller. label:fig-lcd
+   [[file:imgs/lcd-small.png]]
+
+   The pinout is exposed at Figure ref:fig-interfacing is described at the CircuitDigest Web page[fn:https://circuitdigest.com/microcontroller-projects/graphical-lcd-interfacing-with-arduino]. K and A pins are used for controlling the brightness of the active pixels. Be sure to move the potentionmeter to set it properly in case the letters does not appears. 
+
+   #+caption: Interfacing the LCD with the Arduino UNO. label:fig-interfacing
+   [[file:imgs/lcd-interface-small.png]]
+
+*** PINs
+    The following table shows the pin. The PSB pin will determine the type of connection and protocol to use. The Parallel Interface can use 8 bit (DB0 to DB7) or 4 bit (DB0 to DB3). The Serial Interface use an SPI protocol to send RW, RS and DB0 to DB8 bits. 
+
+    |------------+--------------------+------------------|
+    | Pin        | Parallel Interface | Serial Interface |
+    |------------+--------------------+------------------|
+    | BLK        |                    |                  |
+    | BLA        |                    |                  |
+    | VOUT       |                    |                  |
+    | RST        |                    |                  |
+    | NC         |                    |                  |
+    | PSB        | Up                 | Down             |
+    | DB7        |                    |                  |
+    | DB6        |                    |                  |
+    | DB5        |                    |                  |
+    | DB4        |                    |                  |
+    | DB3        |                    |                  |
+    | DB2        |                    |                  |
+    | DB1        |                    |                  |
+    | DB0        |                    |                  |
+    | E          |                    | SCLK             |
+    | R/W        |                    | SID              |
+    | RS         |                    | CS (High)        |
+    | VO         |                    |                  |
+    | VDD        | 5.0V               | 5.0V             |
+    | VSS or GND | 0V                 | 0V               |
+    |------------+--------------------+------------------|
+
+    
+
+* The Arduino's SPI Module
+
+** Pin Connections
+The Arduino UNO board use the following pin layout. 
+
+|-----------+-------------+-----------------|
+| Board Pin | ATMega Port | LCD Module PIN  |
+|-----------+-------------+-----------------|
+|        13 | PB5         | SCK / E         |
+|        12 | PB4         | MISO / GND      |
+|        11 | PB3         | MOSI / SID / RW |
+|        10 | PB2         | SS / CS / RS    |
+|-----------+-------------+-----------------|
+
+The Arduino Mega Board, use the following pin layout.
+
+|-----------+-------------+-----------------|
+| Board Pin | ATMega Port | LCD Module Pin  |
+|-----------+-------------+-----------------|
+|        50 | PB3         | MISO / GND      |
+|        51 | PB2         | MOSI / SID / RW |
+|        52 | PB1         | SCK / E         |
+|        53 | PB0         | SS / CS / RS    |
+|-----------+-------------+-----------------|
+
+** Registers
+The following registers are needed for controlling the SPI module.
+
+|----------------------+------------+-------------|
+| Register full name   | Short name | Address     |
+|----------------------+------------+-------------|
+| SPI Control Register | SPCR       | 0x2C (0x4C) |
+| SPI Status Register  | SPSR       | 0x2D (0x4D) |
+| SPI Data Register    | SPDR       | 0x2E (0x4E) |
+|----------------------+------------+-------------|
+
+* Library
+
+** License
+#+BEGIN_SRC asm
+;; Copyright 2019 Christian Gimenez
+	   
+;; Author: Christian Gimenez
+
+;; usart-lib.asm
+	   
+;; This program is free software: you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
+	   
+;; This program is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+	   
+;; You should have received a copy of the GNU General Public License
+;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#+END_SRC
+** Include headers
+The [[file:wait-lib.org]] library is used. 
+
+#+BEGIN_SRC asm
+.include "wait-lib.asm"
+#+END_SRC
+
+** Configure SPI module 
+This section describes the configuration process of the SPI module. In summary, the MPU must set the following registers. 
+
+The subprogram label is ~.SPI_INIT~. It has no parameters and it is declared as local.
+
+- Pin modes :: Set the I/O of pins.
+  - Set pin MISO as input mode.
+  - Set pins CS, MOSI and SCK as output mode.
+- SPCR :: The following must be setted.
+  - No interruptions.
+  - The master mode must be enabled.
+  - Clock polarity: idle when SCK is low.
+  - Clock phase: data is sampled on leading edge.
+  - Prescaler must be setted between 100 and 400Khz.
+
+*** Start the subroutine
+Define the name of the subroutine and save needed registers on the stack.
+
+#+BEGIN_SRC asm
+.SPI_INIT:
+    push r16
+    ;; push r17
+#+END_SRC
+
+*** Pin Modes
+Set the pin modes according to the master SPI configuration.
+
+Also set CS bit in 1.
+
+**** Arduino UNO
+
+|-----+----------+----------|
+| Pin | SPI Rol  | I/O Mode |
+|-----+----------+----------|
+| PB2 | SS or CS | O        |
+| PB3 | MOSI     | O        |
+| PB4 | MISO     | I        |
+| PB5 | SCK      | O        |
+|-----+----------+----------|
+
+#+BEGIN_SRC asm :tangle no
+    lds r16, DDRB
+
+    set 
+    bld r16, 2 ;; PB2
+    bld r16, 3 ;; PB3
+    bld r16, 5 ;; PB5
+    clt 
+    bld r16, 4 ;; PB4
+
+    sts DDRB, r16
+    sbi OPORTB, 2 ;; PORTB2
+#+END_SRC
+
+**** AtMega 2560
+
+|-------------+-----+-----------------|
+| ATMega Port | I/O | LCD Module Pin  |
+|-------------+-----+-----------------|
+| PB3         | I   | MISO / GND      |
+| PB2         | O   | MOSI / SID / RW |
+| PB1         | O   | SCK / E         |
+| PB0         | O   | SS / CS / RS    |
+|-------------+-----+-----------------|
+
+#+BEGIN_SRC asm
+    lds r16, DDRB
+
+    set
+    bld r16, 2 ;; PB2
+    bld r16, 1 ;; PB1
+    bld r16, 0 ;; PB0
+    clt 
+    bld r16, 3 ;; PB3
+
+    sts DDRB, r16
+    sbi OPORTB, 0 ;; PORTB0
+#+END_SRC
+
+*** SPCR - SPI Control Register 
+This register controls almost all the settings needed for the SPI module. The following section will initialize it with the proper values.
+
+The following table depicts the register's bits and their description.
+
+|------+-----+------+------+------+------+------+------|
+|    7 |   6 |    5 |    4 |    3 |    2 |    1 |    0 |
+|------+-----+------+------+------+------+------+------|
+| SPIE | SPE | DORD | MSTR | CPOL | CPHA | SPR1 | SPR0 |
+|------+-----+------+------+------+------+------+------|
+
+Use the R16 register to change the SPCR value.
+
+#+BEGIN_SRC asm
+    lds r16, SPCR
+#+END_SRC
+
+**** SPIE - Disable Interruptions
+Disable the SPI interruptions.
+
+#+BEGIN_SRC asm
+    clt
+    bld r16, 7 ;; SPIE
+#+END_SRC
+
+**** SPE - SPI Enable
+Turn on the SPI.
+
+#+BEGIN_SRC asm
+    set
+    bld r16, 6 ;; SPE
+#+END_SRC
+
+**** DORD - Data Order
+Send the MSB first. 
+
+|------+------------|
+| DORD | Send first |
+|------+------------|
+|    0 | MSB Word   |
+|    1 | LSB Word   |
+|------+------------|
+
+#+BEGIN_SRC asm
+    clt
+    bld r16, 5 ;; DORD
+#+END_SRC
+
+**** MSTR - Master mode
+Set the master mode. Slave mode is the LCD.
+
+#+BEGIN_SRC asm
+    set
+    bld r16, 4 ;; MSTR
+#+END_SRC
+
+**** CPOL - Clock Polarity
+The Clock Polarity bit (CPOL) defines when is considered an idle state. 
+
+|------+----------------------|
+| CPOL | SCK is in Idle State |
+|------+----------------------|
+|    0 | Low when idle        |
+|    1 | High when idle       |
+|------+----------------------|
+
+The IDLE should be at idle when low: CPOL = 0.
+
+#+BEGIN_SRC asm
+    clt
+    bld r16, 3 ;; CPOL
+#+END_SRC
+
+**** CPHA - Clock Phase
+The data is sampled on leading (first) or trailing (last) edge.
+
+|------+----------------|
+| CPHA | Data Sample on |
+|------+----------------|
+|    0 | Leading Edge   |
+|    1 | Trailing Edge  |
+|------+----------------|
+
+The data sample should be at leading edge: CPHA = 0.
+
+#+BEGIN_SRC asm
+    clt
+    bld r16, 2 ;; CPHA
+#+END_SRC
+
+**** SPR bits - Prescaler
+The prescaler is configured according to the following formulae.
+
+$$\frac{F_{osc}}{Freq} = Prescaler$$ 
+
+The Arduino oscilator frequency is 16,000,000 Hz (16000Khz). The desired frequency should be between 100 and 400Khz.
+
+$$\frac{16000Khz}{400Khz} \le X \le \frac{16000Khz}{100Khz}$$
+$$40 \le X \le 160$$
+
+Considering that SPI2X is zero, the possible prescaler values are.
+
+|------+------+---------------|
+| SPR1 | SPR0 | SCK Frequency |
+|------+------+---------------|
+|    0 |    0 | osc/4         |
+|    0 |    1 | osc/16        |
+|    1 |    0 | osc/64        |
+|    1 |    1 | osc/128       |
+|------+------+---------------|
+
+Using SPR = ~0b10~ will result in $\frac{16000Khz}{64} = 250$.
+
+|-------+------+------|
+| SPI2X | SPR1 | SPR0 |
+|-------+------+------|
+|     0 |    1 | 0    |
+|-------+------+------|
+
+#+BEGIN_SRC asm
+    set
+    bld r16, 1 ;; SPR1
+    clt 
+    bld r16, 0 ;; SPR0
+#+END_SRC
+
+**** Store the constructed value
+#+BEGIN_SRC asm
+    sts SPCR, r16
+#+END_SRC
+
+
+*** SPSR - SPI Status Register
+Only the SPI2X bit is writable. Thus, this bit is the only one to be configured.
+
+Disable 2x prescaler.
+
+#+BEGIN_SRC asm
+    lds r16, SPSR
+    clt 
+    bld r16, 0 ;; SPI bit at SPSR
+    sts SPSR, r16
+#+END_SRC
+
+*** Return from the Subroutine
+Restore registers and return.
+
+#+BEGIN_SRC asm
+    ;; pop r17
+    pop r16
+    ret
+#+END_SRC
+
+** Send Instruction Subroutine
+The following section describe the ~LCD_INST~ subroutine. The objective is to send the a byte of data along with the RS and RW bits. This must be sent using the SPI protocol.
+
+The parameters are the following:
+
+- r16 :: D7:0 bits is stored at this register.
+- r17 :: The RW and RS value. These are the bits order:
+  - bit 7-2 :: 0 or 1.
+  - bit 1 :: RW value.
+  - bit 0 :: RS value.
+
+Each instruction must follow the following sequence:
+
+1. Set CS to High.
+2. Send 5 high bits.
+3. Send the RW and RS bits.
+4. Send a low bit.
+5. Send D7 to D4 bits (higher data).
+6. Send four low bits.
+7. Send D3 to D0 bits (lower data).
+8. Send four low bits.
+9. Set CS to Low.
+
+[[file:imgs/timing-diagram-small.png]]
+
+*** Begin Subroutine
+Start the subroutine and save registers.
+
+#+BEGIN_SRC asm
+LCD_INST:
+    push r16
+    push r17
+#+END_SRC
+
+*** Prepare the first byte
+Prepare the following byte: ~11111 RW RS 0~
+
+#+BEGIN_SRC asm
+    lsl r17
+    ori r17, 0b11111000
+#+END_SRC
+
+Send the first byte. Wait until the SPIF bit (in SPSR register) is one.
+
+#+BEGIN_SRC asm
+    sts SPDR, r17
+1:
+    lds r17, SPSR
+    sbrs r17, 7 ;; SPIF bit at SPSR.
+    rjmp 1b
+#+END_SRC
+
+*** Send the Higher Data bits
+Prepare the following byte: ~D7-D4 0000~
+
+#+BEGIN_SRC asm
+    mov r17, r16
+    andi r17, 0b11110000
+#+END_SRC
+
+Send the bits and wait for the high SPIF bit 
+
+#+BEGIN_SRC asm
+    sts SPDR, r17
+1:
+    lds r17, SPSR
+    sbrs r17, 7 ;; SPIF bit at SPSR.
+    rjmp 1b
+#+END_SRC
+
+*** Send the Lower Data Bits
+Prepare the following byte: ~D3-D0 0000~
+
+#+BEGIN_SRC asm
+    mov r17, r16
+    lsl r17
+    lsl r17
+    lsl r17
+    lsl r17
+    andi r17, 0b11110000
+#+END_SRC
+
+Send the bits and wait for the SPIF bit.
+
+#+BEGIN_SRC asm
+    sts SPDR, r17
+1:
+    lds r17, SPSR
+    sbrs r17, 7 ;; SPIF bit at SPSR.
+    rjmp 1b
+#+END_SRC
+
+*** Return
+Return from the subroutine. Ensure the used register are restored.
+
+#+BEGIN_SRC asm
+    pop r17
+    pop r16
+    ret
+#+END_SRC
+
+** Initialize the LCD
+The initialization of the LCD is achieved by using a sequence of command.
+
+1. Power on.
+2. Wait 40ms. ~xreset~ will change from low to high.
+3. Function set: ~00 0011x0xx~. Wait 100 \mu{}s.
+4. Function set: ~00 0011x0xx~. Wait 35 \mu{}s.
+5. Display ON/OFF Status Command: ~00 00001DCB~. Wait 100 \mu{}s.
+6. Display clear: ~00 00000001~. Wait 10 ms.
+7. Entry mode: ~00 000001 I/D S~
+
+The ~LCD_INIT~ command is defined in this section. Its purpose is to follow the given steps. This subroutine has no parameters.
+
+*** Begin Subroutine
+Save registers that will be used by the subroutine.
+#+BEGIN_SRC asm
+LCD_INIT:
+    push r16
+    push r17
+#+END_SRC
+
+*** Call the SPI Initialization
+Ensure that the SPI has been initialized.
+#+BEGIN_SRC asm
+    rcall .SPI_INIT
+#+END_SRC
+
+*** Wait
+Wait 40ms. 0x00ffffff is at least 16777215 cicles. A cicle cost 62.5 nanoseconds with a 16000Khz clock. 
+
+$$62.5ns \cdot 16777215 cicles = 1048575937.5ns = 1048 ms$$
+
+As long as R16 is 0x01, the waiting will be at least 1048ms.
+
+#+BEGIN_SRC asm
+    ldi r16, 0x01
+    rcall WAIT
+#+END_SRC
+
+*** Send Two Function Set Commands
+Send the first instruction. RS and RW must be 0. High data must be 0011.
+
+#+BEGIN_SRC asm
+    ldi r16, 0b00110000
+    ldi r17, 0x00
+    rcall LCD_INST
+#+END_SRC
+
+Wait more than 100 \mu{}s.
+
+#+BEGIN_SRC asm
+    ldi r16, 0x01
+    rcall WAIT
+#+END_SRC
+
+Send the second instruction.
+
+#+BEGIN_SRC asm
+    ldi r16, 0b00110000
+    ldi r17, 0x00
+    rcall LCD_INST
+#+END_SRC
+
+Wait more than 35 \mu{}s.
+
+#+BEGIN_SRC asm
+    ldi r16, 0x01
+    rcall WAIT
+#+END_SRC
+
+*** Send Display Status Command
+
+#+BEGIN_SRC asm
+    ldi r17, 0x00
+    ldi r16, 0b00001100
+    set
+    bld r16, 2 ;; Display on = 1
+    clt
+    bld r16, 1 ;; Cursor on = 1
+    bld r16, 0 ;; Blink on = 1
+    rcall LCD_INST
+#+END_SRC
+
+Wait more than 100 \mu{}s.
+
+#+BEGIN_SRC asm
+    ldi r16, 0x01
+    rcall WAIT
+#+END_SRC
+
+*** Send the Display Clear Command
+#+BEGIN_SRC asm
+    ldi r17, 0x00
+    ldi r16, 0b00000001
+    rcall LCD_INST
+#+END_SRC
+
+Wait 10 ms.
+
+#+BEGIN_SRC asm
+    ldi r16, 0x01
+    rcall WAIT
+#+END_SRC
+
+*** Send the Entry Mode Command
+This command controls the Increment and the Display Shift.
+
+#+BEGIN_SRC asm
+    ldi r17, 0x00
+    ldi r16, 0b00000100
+    set 
+    bld r16, 1 ;; I/D
+    clt
+    bld r16, 0 ;; S
+    rcall LCD_INST
+#+END_SRC
+
+Wait 72\mu{}s.
+
+#+BEGIN_SRC asm
+    ldi r16, 0x01
+    rcall WAIT
+#+END_SRC
+
+*** End Subroutine
+Restore registers and return.
+
+#+BEGIN_SRC asm
+    pop r17
+    pop r16
+    ret
+#+END_SRC
+
+
+** Set DDRAM Address
+Use the ~LCD_DDRAM_ADDR~ subroutine to set the DDRAM address at the LCD.
+
+Parameters:
+- r16 :: The address to point on the DDRAM.
+
+*** Begin subroutine
+#+BEGIN_SRC asm
+LCD_DDRAM_ADDR:
+    push r16
+    push r17
+#+END_SRC
+
+*** Send the address
+The set address command is:
+|----+----+----+---------|
+| RS | RW | D7 | D6-D0   |
+|----+----+----+---------|
+|  0 |  0 |  1 | Address |
+|----+----+----+---------|
+
+#+BEGIN_SRC asm
+    ori r16, 0b10000000
+    ldi r17, 0x00
+    rcall LCD_INST
+#+END_SRC
+
+*** Wait 
+#+BEGIN_SRC asm
+    ldi r16, 0x01
+    rcall WAIT
+#+END_SRC
+
+*** End subroutine
+#+BEGIN_SRC asm
+    pop r17
+    pop r16
+    ret
+#+END_SRC
+
+
+
+** Set DDRAM Value
+Use the ~LCD_DDRAM_VAL~ instruction to send a value to the CGRAM 
+
+Parameters:
+
+- r16 :: Character value.
+
+*** Begin subroutine
+
+#+BEGIN_SRC asm
+LCD_DDRAM_VAL:
+    push r16
+    push r17
+#+END_SRC
+
+*** Send the Data
+Send the command following command:
+
+|----+----+-------|
+| RS | RW | D7-D0 |
+|----+----+-------|
+|  0 |  1 | D7-D0 |
+|----+----+-------|
+
+#+BEGIN_SRC asm
+    ldi r17, 0b00000001
+    rcall LCD_INST
+#+END_SRC
+
+*** Wait 
+#+BEGIN_SRC asm
+    ldi r16, 0x01
+    rcall WAIT
+#+END_SRC
+
+*** End subroutine
+#+BEGIN_SRC asm
+    pop r17
+    pop r16
+    ret
+#+END_SRC
+
+
+* Test
+:PROPERTIES:
+:header-args: :comments no :padline yes :mkdirp t :tangle tests/lcd/lcd-send.asm
+:END:
+
+** License
+#+BEGIN_SRC asm
+;; Copyright 2019 Christian Gimenez
+	   
+;; Author: Christian Gimenez
+
+;; usart-lib.asm
+	   
+;; This program is free software: you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
+	   
+;; This program is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+	   
+;; You should have received a copy of the GNU General Public License
+;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#+END_SRC
+
+** Include Headers
+Inculde vectors table.
+
+For the AtMega. 
+
+#+BEGIN_SRC asm :tangle no
+.include "../../vector-inc.asm"
+#+END_SRC
+
+For the AtMega 2560 processor.
+
+#+BEGIN_SRC asm
+.include "../../vector-atmega2560-inc.asm"
+#+END_SRC
+
+Include register names. 
+
+For the Arduno Uno processor.
+
+#+BEGIN_SRC asm :tangle no
+.include "../../registers-inc.asm"
+#+END_SRC
+
+For the AtMega 2560 processor.
+
+#+BEGIN_SRC asm
+.include "../../registers-atmega2560-inc.asm"
+#+END_SRC
+
+** Main program
+
+#+BEGIN_SRC asm
+.text
+
+RESET:
+#+END_SRC
+
+** Initialize
+
+*** Led L
+Set the L led (PB7) to output mode. Turn on and off.
+
+#+BEGIN_SRC asm
+    sbi ODDRB, 7 ;; PB7 / Led L
+    sbi OPORTB, 7
+    ldi r16, 0x20
+    rcall WAIT
+    cbi OPORTB, 7
+#+END_SRC
+
+*** LCD 
+#+BEGIN_SRC asm
+    rcall LCD_INIT
+#+END_SRC
+
+L led turns on and off to show the user that the LCD has been initialized.
+
+#+BEGIN_SRC asm
+    sbi OPORTB, 7
+    ldi r16, 0x20
+    rcall WAIT
+    cbi OPORTB, 7
+#+END_SRC
+
+** Write something on the LCD
+#+BEGIN_SRC asm
+    ldi r16, 0x00
+    rcall LCD_DDRAM_ADDR
+    ldi r16, 0x02
+    rcall LCD_DDRAM_VAL
+    ldi r16, 'H'
+    rcall LCD_DDRAM_VAL
+    ldi r16, 'o'
+    rcall LCD_DDRAM_VAL
+    ldi r16, 'l'
+    rcall LCD_DDRAM_VAL
+    ldi r16, 'a'
+    rcall LCD_DDRAM_VAL
+
+#+END_SRC
+
+
+** End Program
+#+BEGIN_SRC asm
+    rjmp END
+#+END_SRC
+
+** Include libraries
+Add the LCD library.
+
+#+BEGIN_SRC asm
+.include "../../lcd-spi-lib.asm"
+#+END_SRC
+
+** Vector handlers 
+
+#+BEGIN_SRC asm
+;; Vector Handlers
+
+
+INT0:        ; IRQ0 Handler 
+INT1:        ; IRQ1 Handler 
+INT2:        ; IRQ2 Handler 
+INT3:        ; IRQ3 Handler 
+INT4:        ; IRQ4 Handler 
+INT5:        ; IRQ5 Handler 
+INT6:        ; IRQ6 Handler 
+INT7:        ; IRQ7 Handler 
+PCINT0:      ; PCINT0 Handler 
+PCINT1:      ; PCINT1 Handler 
+PCINT2:      ; PCINT2 Handler 
+WD:          ; Watchdog Timeout Handler 
+TIM2_COMPA:  ; Timer2 CompareA Handler 
+TIM2_COMPB:  ; Timer2 CompareB Handler 
+TIM2_OVF:    ; Timer2 Overflow Handler 
+TIM1_CAPT:   ; Timer1 Capture Handler 
+TIM1_COMPA:  ; Timer1 CompareA Handler 
+TIM1_COMPB:  ; Timer1 CompareB Handler 
+TIM1_COMPC:  ; Timer1 CompareC Handler 
+TIM1_OVF:    ; Timer1 Overflow Handler 
+TIM0_COMPA:  ; Timer0 CompareA Handler 
+TIM0_COMPB:  ; Timer0 CompareB Handler 
+TIM0_OVF:    ; Timer0 Overflow Handler 
+SPI_STC:     ; SPI Transfer Complete Handler 
+USART0_RXC:  ; USART0 RX Complete Handler 
+USART0_UDRE: ; USART0,UDR Empty Handler 
+USART0_TXC:  ; USART0 TX Complete Handler 
+ANA_COMP:    ; Analog Comparator Handler 
+ADC:         ; ADC Conversion Complete Handler 
+EE_RDY:      ; EEPROM Ready Handler 
+TIM3_CAPT:   ; Timer3 Capture Handler 
+TIM3_COMPA:  ; Timer3 CompareA Handler 
+TIM3_COMPB:  ; Timer3 CompareB Handler 
+TIM3_COMPC:  ; Timer3 CompareC Handler 
+TIM3_OVF:    ; Timer3 Overflow Handler 
+USART1_RXC:  ; USART1 RX Complete Handler 
+USART1_UDRE: ; USART1,UDR Empty Handler 
+USART1_TXC:  ; USART1 TX Complete Handler 
+TWI:         ; 2-wire Serial Handler 
+SPM_RDY:     ; SPM Ready Handler 
+TIM4_CAPT:   ; Timer4 Capture Handler 
+TIM4_COMPA:  ; Timer4 CompareA Handler 
+TIM4_COMPB:  ; Timer4 CompareB Handler 
+TIM4_COMPC:  ; Timer4 CompareC Handler 
+TIM4_OVF:    ; Timer4 Overflow Handler 
+TIM5_CAPT:   ; Timer5 Capture Handler 
+TIM5_COMPA:  ; Timer5 CompareA Handler 
+TIM5_COMPB:  ; Timer5 CompareB Handler 
+TIM5_COMPC:  ; Timer5 CompareC Handler 
+TIM5_OVF:    ; Timer5 Overflow Handler 
+USART2_RXC:  ; USART2 RX Complete Handler 
+USART2_UDRE: ; USART2,UDR Empty Handler 
+USART2_TXC:  ; USART2 TX Complete Handler 
+USART3_RXC:  ; USART3 RX Complete Handler 
+USART3_UDRE: ; USART3,UDR Empty Handler 
+USART3_TXC:  ; USART3 TX Complete Handler
+
+;; __________________________________________________
+    reti
+END:
+    nop
+    break
+    rjmp END
+
+#+END_SRC
+
+* Test with Graphics
+:PROPERTIES:
+:header-args: :comments no :padline yes :mkdirp t :tangle tests/lcd/lcd-graphics.asm
+:END:
+
+** License
+#+BEGIN_SRC asm
+;; Copyright 2019 Christian Gimenez
+	   
+;; Author: Christian Gimenez
+
+;; usart-lib.asm
+	   
+;; This program is free software: you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
+	   
+;; This program is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+	   
+;; You should have received a copy of the GNU General Public License
+;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#+END_SRC
+
+** Include Headers
+Inculde vectors table.
+
+For the AtMega. 
+
+#+BEGIN_SRC asm :tangle no
+.include "../../vector-inc.asm"
+#+END_SRC
+
+For the AtMega 2560 processor.
+
+#+BEGIN_SRC asm
+.include "../../vector-atmega2560-inc.asm"
+#+END_SRC
+
+Include register names. 
+
+For the Arduno Uno processor.
+
+#+BEGIN_SRC asm :tangle no
+.include "../../registers-inc.asm"
+#+END_SRC
+
+For the AtMega 2560 processor.
+
+#+BEGIN_SRC asm
+.include "../../registers-atmega2560-inc.asm"
+#+END_SRC
+
+** Main program
+
+#+BEGIN_SRC asm
+.text
+
+RESET:
+#+END_SRC
+
+** Initialize
+
+*** Led L
+Set the L led (PB7) to output mode. Turn on and off.
+
+#+BEGIN_SRC asm
+    sbi ODDRB, 7 ;; PB7 / Led L
+    sbi OPORTB, 7
+    ldi r16, 0x20
+    rcall WAIT
+    cbi OPORTB, 7
+#+END_SRC
+
+*** LCD 
+#+BEGIN_SRC asm
+    rcall LCD_INIT
+#+END_SRC
+
+L led turns on and off to show the user that the LCD has been initialized.
+
+#+BEGIN_SRC asm
+    sbi OPORTB, 7
+    ldi r16, 0x20
+    rcall WAIT
+    cbi OPORTB, 7
+#+END_SRC
+
+** Write something on the LCD
+#+BEGIN_SRC asm
+    ldi r16, 0b00110100 ;; Enable extended Inst. Set.
+    ldi r17, 0x00
+    rcall LCD_INST
+    
+    ldi r16, 0b00110110 ;; Enable Graphics
+    ldi r17, 0x00
+    rcall LCD_INST
+
+    ;; V
+    ldi r16, 0b10000100
+    ldi r17, 0x00
+    rcall LCD_INST
+    ;; H
+    ldi r16, 0b10000100
+    ldi r17, 0x00
+    rcall LCD_INST
+
+
+    ;; Exit extended inst. set
+    ldi r16, 0b00110010
+    ldi r17, 0x00
+    rcall LCD_INST
+    ;; Clear
+    ldi r16, 0x01
+    ldi r17, 0x00
+    rcall LCD_INST
+    ldi r16, 0b00110110 ;; Enable Graphics
+    ldi r17, 0x00
+    rcall LCD_INST
+
+    
+    ;; Draw
+    ldi r17, 0b00000001
+    ldi r16,0b00100010
+    rcall LCD_INST
+    ldi r17, 0x01
+    ldi r16,0b10011001
+    rcall LCD_INST
+    ldi r17, 0b00000001
+    ldi r16,0b00100010
+    rcall LCD_INST
+    ldi r17, 0x01
+    ldi r16,0b10011001
+    rcall LCD_INST
+    ldi r17, 0b00000001
+    ldi r16,0b00100010
+    rcall LCD_INST
+    ldi r17, 0x01
+    ldi r16,0b10011001
+    rcall LCD_INST
+    ldi r17, 0b00000001
+    ldi r16,0b00100010
+    rcall LCD_INST
+    ldi r17, 0x01
+    ldi r16,0b10011001
+    rcall LCD_INST
+#+END_SRC
+
+
+** End Program
+#+BEGIN_SRC asm
+    rjmp END
+#+END_SRC
+
+** Include libraries
+Add the LCD library.
+
+#+BEGIN_SRC asm
+.include "../../lcd-spi-lib.asm"
+#+END_SRC
+
+** Vector handlers 
+
+#+BEGIN_SRC asm
+;; Vector Handlers
+
+
+INT0:        ; IRQ0 Handler 
+INT1:        ; IRQ1 Handler 
+INT2:        ; IRQ2 Handler 
+INT3:        ; IRQ3 Handler 
+INT4:        ; IRQ4 Handler 
+INT5:        ; IRQ5 Handler 
+INT6:        ; IRQ6 Handler 
+INT7:        ; IRQ7 Handler 
+PCINT0:      ; PCINT0 Handler 
+PCINT1:      ; PCINT1 Handler 
+PCINT2:      ; PCINT2 Handler 
+WD:          ; Watchdog Timeout Handler 
+TIM2_COMPA:  ; Timer2 CompareA Handler 
+TIM2_COMPB:  ; Timer2 CompareB Handler 
+TIM2_OVF:    ; Timer2 Overflow Handler 
+TIM1_CAPT:   ; Timer1 Capture Handler 
+TIM1_COMPA:  ; Timer1 CompareA Handler 
+TIM1_COMPB:  ; Timer1 CompareB Handler 
+TIM1_COMPC:  ; Timer1 CompareC Handler 
+TIM1_OVF:    ; Timer1 Overflow Handler 
+TIM0_COMPA:  ; Timer0 CompareA Handler 
+TIM0_COMPB:  ; Timer0 CompareB Handler 
+TIM0_OVF:    ; Timer0 Overflow Handler 
+SPI_STC:     ; SPI Transfer Complete Handler 
+USART0_RXC:  ; USART0 RX Complete Handler 
+USART0_UDRE: ; USART0,UDR Empty Handler 
+USART0_TXC:  ; USART0 TX Complete Handler 
+ANA_COMP:    ; Analog Comparator Handler 
+ADC:         ; ADC Conversion Complete Handler 
+EE_RDY:      ; EEPROM Ready Handler 
+TIM3_CAPT:   ; Timer3 Capture Handler 
+TIM3_COMPA:  ; Timer3 CompareA Handler 
+TIM3_COMPB:  ; Timer3 CompareB Handler 
+TIM3_COMPC:  ; Timer3 CompareC Handler 
+TIM3_OVF:    ; Timer3 Overflow Handler 
+USART1_RXC:  ; USART1 RX Complete Handler 
+USART1_UDRE: ; USART1,UDR Empty Handler 
+USART1_TXC:  ; USART1 TX Complete Handler 
+TWI:         ; 2-wire Serial Handler 
+SPM_RDY:     ; SPM Ready Handler 
+TIM4_CAPT:   ; Timer4 Capture Handler 
+TIM4_COMPA:  ; Timer4 CompareA Handler 
+TIM4_COMPB:  ; Timer4 CompareB Handler 
+TIM4_COMPC:  ; Timer4 CompareC Handler 
+TIM4_OVF:    ; Timer4 Overflow Handler 
+TIM5_CAPT:   ; Timer5 Capture Handler 
+TIM5_COMPA:  ; Timer5 CompareA Handler 
+TIM5_COMPB:  ; Timer5 CompareB Handler 
+TIM5_COMPC:  ; Timer5 CompareC Handler 
+TIM5_OVF:    ; Timer5 Overflow Handler 
+USART2_RXC:  ; USART2 RX Complete Handler 
+USART2_UDRE: ; USART2,UDR Empty Handler 
+USART2_TXC:  ; USART2 TX Complete Handler 
+USART3_RXC:  ; USART3 RX Complete Handler 
+USART3_UDRE: ; USART3,UDR Empty Handler 
+USART3_TXC:  ; USART3 TX Complete Handler
+
+;; __________________________________________________
+    reti
+END:
+    nop
+    break
+    rjmp END
+
+#+END_SRC
+
+
+* Meta     :noexport:
+
+  # ----------------------------------------------------------------------
+  #+TITLE:  LCD using SPI
+  #+AUTHOR: Christian Gimenez
+  #+DATE:   10 Aug 2019
+  #+EMAIL:
+  #+DESCRIPTION: 
+  #+KEYWORDS: 
+
+  #+STARTUP: inlineimages hidestars content hideblocks entitiespretty indent fninline latexpreview
+  #+TODO: TODO(t!) CURRENT(c!) PAUSED(p!) | DONE(d!) CANCELED(C!@)
+  #+OPTIONS:   H:3 num:t toc:t \n:nil @:t ::t |:t ^:{} -:t f:t *:t <:t
+  #+OPTIONS:   TeX:t LaTeX:t skip:nil d:nil todo:t pri:nil tags:not-in-toc tex:imagemagick
+  #+LINK_UP:   
+  #+LINK_HOME: 
+  #+XSLT:
+
+  # -- HTML Export
+  #+INFOJS_OPT: view:info toc:t ftoc:t ltoc:t mouse:underline buttons:t path:libs/org-info.js
+  #+EXPORT_SELECT_TAGS: export
+  #+EXPORT_EXCLUDE_TAGS: noexport
+  #+HTML_LINK_UP: ../../index.html
+  #+HTML_LINK_HOME: ../../index.html
+
+  # -- For ox-twbs or HTML Export
+  #+HTML_HEAD: <link href="../../libs/bootstrap.min.css" rel="stylesheet">
+  #+HTML_HEAD: <script src="../../libs/jquery.min.js"></script> 
+  #+HTML_HEAD: <script src="../../libs/bootstrap.min.js"></script>
+  #+LANGUAGE: en
+
+  # Local Variables:
+  # org-hide-emphasis-markers: t
+  # org-use-sub-superscripts: "{}"
+  # fill-column: 80
+  # visual-line-fringe-indicators: t
+  # ispell-local-dictionary: "british"
+  # org-src-preserve-indentation: t
+  # End:
