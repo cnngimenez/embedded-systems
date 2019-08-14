@@ -208,7 +208,7 @@ uint8_t resp;
 
 #+BEGIN_SRC c
 resp = i2c_start();
-if (resp != MT_START_TRANSMITTED || resp != MT_RSTART_TRANSMITTED){
+if (resp != MT_START_TRANSMITTED && resp != MT_RSTART_TRANSMITTED){
  return resp;
 }
 #+END_SRC
@@ -218,43 +218,43 @@ Send a SLA+W to request to select the DHT12 among other slaves. The DHT12 addres
 
 #+BEGIN_SRC c
 resp = i2c_sla_w(0xb8);
-if (resp != MT_SLAACK_RECEIVED) {
+/*if (resp != MT_SLAACK_RECEIVED) {
   return resp;
-}
+}*/
 #+END_SRC
 
 *** Send the DHT12 byte address 
 
 #+BEGIN_SRC c
 resp = i2c_send(addr);
-if (resp != MT_ACK_DATAREC) {
+/*if (resp != MT_ACK_DATAREC) {
   return resp;
-}
+}*/
 #+END_SRC
 
 *** Re-START the I2C connection
 
 #+BEGIN_SRC c
 resp = i2c_start();
-if (resp != MR_RSTART_TRANSMITTED){
+/*if (resp != MR_RSTART_TRANSMITTED){
   return resp;
-}
+}*/
 #+END_SRC
 
 *** Send a SLA+R
 #+BEGIN_SRC c
 resp = i2c_sla_r(0xb8);
-if (resp != MR_SLAACK_RECEIVED) {
+/*if (resp != MR_SLAACK_RECEIVED) {
   return resp;
-}
+}*/
 #+END_SRC
 
 *** Receive the data
 #+BEGIN_SRC c
 resp = i2c_receive(data, 1);
-if (resp != MR_NACK_DATAREC){
+/*if (resp != MR_NACK_DATAREC){
   return resp;
-}
+}*/
 #+END_SRC
 
 *** Send a STOP
@@ -382,6 +382,21 @@ Variables needed.
 unsigned long i = 0;
 uint8_t resp;
 #+END_SRC
+
+Try to get a data byte (only one data) and return the value or the error number.
+
+#+BEGIN_SRC c
+ uint8_t data;
+ resp = dht12_get_data(0x00, &data);
+ if (resp == 1){
+   serial_send_string("\n\rGet data:");
+   serial_send_hex(data);
+ }else{
+   serial_send_string("\n\rGet data error:");
+   serial_send_hex(resp);
+ }
+#+END_SRC
+
 
 
 Loop forever.

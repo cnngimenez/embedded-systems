@@ -13,6 +13,16 @@ serial_send_string("DHT12 initialized.\n\r");
 unsigned long i = 0;
 uint8_t resp;
 
+uint8_t data;
+resp = dht12_get_data(0x00, &data);
+if (resp == 1){
+  serial_send_string("\n\rGet data:");
+  serial_send_hex(data);
+}else{
+  serial_send_string("\n\rGet data error:");
+  serial_send_hex(resp);
+}
+
 while (1){
 
 serial_send_string("\n\rTemp:");

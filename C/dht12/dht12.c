@@ -19,34 +19,34 @@ uint8_t dht12_get_data(uint8_t addr, uint8_t *data){
 uint8_t resp;
 
 resp = i2c_start();
-if (resp != MT_START_TRANSMITTED || resp != MT_RSTART_TRANSMITTED){
+/*if (resp != MT_START_TRANSMITTED && resp != MT_RSTART_TRANSMITTED){
  return resp;
-}
+ }*/
 
 resp = i2c_sla_w(0xb8);
-if (resp != MT_SLAACK_RECEIVED) {
+/*if (resp != MT_SLAACK_RECEIVED) {
   return resp;
-}
+  }*/
 
 resp = i2c_send(addr);
-if (resp != MT_ACK_DATAREC) {
+/*if (resp != MT_ACK_DATAREC) {
   return resp;
-}
+}*/
 
 resp = i2c_start();
-if (resp != MR_RSTART_TRANSMITTED){
+/*if (resp != MR_RSTART_TRANSMITTED){
   return resp;
-}
+}*/
 
 resp = i2c_sla_r(0xb8);
-if (resp != MR_SLAACK_RECEIVED) {
+/*if (resp != MR_SLAACK_RECEIVED) {
   return resp;
-}
+}*/
 
 resp = i2c_receive(data, 1);
-if (resp != MR_NACK_DATAREC){
+/*if (resp != MR_NACK_DATAREC){
   return resp;
-}
+}*/
 
 resp = i2c_stop();
 
