@@ -1,0 +1,35 @@
+* init
+
+  - set modes
+  - send 1 to SSpin
+  - set SPI, Master and f_osc/128 at SPCR
+  - clear SPI2X at SPSR
+  - spiSend 0xFF 10 times (supply 74 clock cycles with CS high)
+  - CS low
+  - Send CMD0,0 with cardCommand. Repeat until R1 is 0x01 
+    
+  Continues with more.
+
+* cardCommand
+
+  - end partial block read. Use readEnd
+  - CS low
+  - wait until SD card is not busy. Use waitNotBusy
+  - spiSend the command | 0x40
+  - Send arguments with spiSend
+  - send CRC with spiSend
+    - for CMD0, crc = 0x95
+    - for CMD8, crc = 0x87
+    - else, crc = 0xFF
+  - Wait for response with spiRec & 0x80
+      
+* spiSend
+  - Set SPDR with byte
+  - Wait until not SPSR & (1<<SPIF)
+ 
+* spiRec
+  - Send 0xFF
+  - Return SPDR contents.
+
+* waitNotBusy
+  wait until spiRec() is 0xFF
