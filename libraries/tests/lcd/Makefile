@@ -1,6 +1,6 @@
 # File to compile
 ifndef FILE
-FILE=lcd-send
+FILE=lcd-graphics2
 endif
 
 # Compiling variables

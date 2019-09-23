@@ -21,9 +21,33 @@
 
 .include "../../registers-atmega2560-inc.asm"
 
+.section .rodata
+.face:	
+	.byte 0xff, 0xff, 0xff, 0xff
+	.byte 0xff, 0xff, 0xff, 0xff
+	.byte 0xff, 0xff, 0xff, 0xff
+	.byte 0xff, 0xff, 0xff, 0xff
+	.byte 0x00, 0x00, 0x00, 0x00
+
 .text
 
 RESET:
+
+	ldi ZL, lo8(STATIC_DATA)
+	ldi ZH, hi8(STATIC_DATA)
+	ldi XL, lo8(.face)
+	ldi XH, hi8(.face)
+
+1:
+	lpm r16, Z+
+	cpi r16, 0x00
+	breq .cont_program
+	
+	st X+, r16
+	rjmp 1b
+
+.cont_program:
+	st X+, r16
 
     sbi ODDRB, 7 ;; PB7 / Led L
     sbi OPORTB, 7
@@ -38,10 +62,6 @@ RESET:
     rcall WAIT
     cbi OPORTB, 7
 
-    ldi r16, 0b00110100 ;; Enable extended Inst. Set.
-    ldi r17, 0x00
-    rcall LCD_INST
-    
     ldi r16, 0b00110110 ;; Enable Graphics
     ldi r17, 0x00
     rcall LCD_INST
@@ -55,37 +75,17 @@ RESET:
     ldi r17, 0x00
     rcall LCD_INST
 
-	ldi r16, 0x01
-	ldi r17, 0x00
-	rcall LCD_INST
-    
-    ;; Draw
-    ldi r17, 0b00000001
-    ldi r16,0b10000001
-    rcall LCD_INST
-    ldi r17, 0x01
-    ldi r16,0b01111110
-    rcall LCD_INST
-    ldi r17, 0b00000001
-    ldi r16,0b10000001
-    rcall LCD_INST
-    ldi r17, 0x01
-    ldi r16,0b01111110
-    rcall LCD_INST
-    ldi r17, 0b00000001
-    ldi r16,0b10000001
-    rcall LCD_INST
-    ldi r17, 0x01
-    ldi r16,0b01111110
-    rcall LCD_INST
-    ldi r17, 0b00000001
-    ldi r16,0b10000001
-    rcall LCD_INST
-    ldi r17, 0x01
-    ldi r16,0b01111110
-    rcall LCD_INST
-
+1:
+	ldi XL, lo8(.face)
+	ldi XH, hi8(.face)
+	ldi r16, 4
+	ldi r17, 4
+	ldi r18, 0
+	ldi r19, 0
+	rcall LCD_COPY_GDRAM
 	
+	rjmp END
+
     rjmp END
 
 .include "../../lcd-spi-lib.asm"
@@ -156,3 +156,5 @@ END:
     nop
     break
     rjmp END
+
+STATIC_DATA:
