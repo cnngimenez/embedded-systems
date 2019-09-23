@@ -17,6 +17,7 @@ Examples made for the Arduino board.
 - [[file:echo/echo.org][Serial Echo Example]] (UART example) 
 - [[file:servo/servo.org][Servo Motor Example]] (PWM example)
 - [[file:power-management/index.org][Power Management Example]]
+- [[file:libraries/lcd-spi.org][Graphical LCD with SPI library]] (SPI examples)
 
 These examples are at a Bitbucket repository at this URL: https://bitbucket.org/cnngimenez/embedded_systems
 

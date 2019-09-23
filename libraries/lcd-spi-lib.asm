@@ -450,3 +450,286 @@ LCD_DDRAM_VAL:
     pop r17
     pop r16
     ret
+
+;; Set Text Mode
+
+LCD_TMODE:
+    push r16
+    push r17
+
+    ldi r16, 0b00110100 ;; Enable extended Inst. Set.
+    ldi r17, 0x00
+    rcall LCD_INST
+    ldi r16, 0b00110100 ;; Enable extended Inst. Set.
+    ldi r17, 0x00
+    rcall LCD_INST
+    ldi r16, 0b00110000 ;; Enable extended Inst. Set.
+    ldi r17, 0x00
+    rcall LCD_INST
+
+    pop r17
+    pop r16
+    ret
+
+;; Set Graphic Mode
+
+LCD_GMODE:
+    push r16
+    push r17
+
+
+
+;; First, set the extended instruction set.
+
+
+    ldi r16, 0b00110100 ;; Enable extended Inst. Set.
+    ldi r17, 0x00
+    rcall LCD_INST
+
+
+
+;; Now set the graphic command.
+
+
+    ldi r16, 0b00110110 ;; Enable Graphic mode
+    ldi r17, 0x00
+    rcall LCD_INST
+
+    pop r17
+    pop r16
+    ret
+
+;; Define the subroutine
+
+LCD_GDRAM_ADDR:
+
+;; Set the graphic mode
+
+    rcall LCD_GMODE
+
+;; Send the vertical value
+;; Always send the vertical value first. The ST7920 will be waiting for the low value.
+
+
+    push r17
+
+    ori r16, 0b10000000
+    ldi r17, 0x00
+    rcall LCD_INST
+    
+    pop r17
+
+;; Send the horizontal value
+
+
+    push r16
+    push r17
+
+    mov r16, r17
+    ori r16, 0b10000000
+    ldi r17, 0x00
+    rcall LCD_INST
+
+    pop r17
+    pop r16
+
+;; End Subroutine
+
+    ret
+
+;; Begin subroutine
+
+LCD_GDRAM_VAL:
+
+;; Send values
+
+    push r17
+
+    ;; Send high value
+    ldi r17, 0x01
+    rcall LCD_INST
+
+    pop r17
+
+    ;; Send low value
+    mov r16, r17
+    ldi r17, 0x01
+    rcall LCD_INST
+
+;; Return from subroutine
+
+    ret
+
+;; Define subroutine
+
+LCD_COPY_GDRAM:
+    push r20
+    push r21
+    push r22
+    push r23
+
+;; Preserve some registers
+;; r16 and r17 registers will be used for parameters. Move their values to another place.
+
+;; |--------------+-----------+----------------|
+;; | New register | previous  | Desc.          |
+;; |--------------+-----------+----------------|
+;; | r18          | r18       | X              |
+;; | r19          | r19       | Y              |
+;; | r20          | r16       | Width          |
+;; | r21          | r17       | Height         |
+;; | r22          | r16 / r20 | Width counter  |
+;; | r23          | r17 / r21 | Height counter |
+;; |--------------+-----------+----------------|
+
+
+    mov r20, r16
+    mov r21, r17
+    mov r22, r16
+    mov r23, r17
+
+;; Position the GDRAM
+;; Position the GDRAM cursor.
+
+
+.position:
+    mov r16, r19
+    mov r17, r18
+    rcall LCD_GDRAM_ADDR
+
+;; Send bytes
+;; Take one byte from RAM and send it to the LCD. Repeat until width-bytes has been transmitted.
+
+
+1:
+    ld r16, X+
+    ld r17, X+
+    rcall LCD_GDRAM_VAL
+
+    dec r22 ;; Decrement width counter
+    dec r22
+    cpi r22, 0x00
+    brne 1b
+
+;; Increment the vertical position
+;; Decrement the height value, and increment the vertical position.
+
+;; Restore the width counter with the total width.
+
+;; If the height value reaches zero, then end.
+
+
+    dec r23 ;; Decrement height counter
+    inc r19
+
+    mov r22, r20 ;; Restore width counter
+
+    cpi r23, 0x00
+    brne .position
+
+;; End subroutine
+
+    pop r23
+    pop r22
+    pop r21
+    pop r20
+    ret
+
+;; Begin subroutine
+
+LCD_GCLEAR:
+    push r17
+    push r18
+    push r19
+    push r20
+    mov r20, r16
+
+;; Starting Position 
+;; Set the counters at the initial values.
+
+;; - r18 :: Vertical counter.
+;; - r19 :: Horizontal counter.
+
+
+    ldi r16, 0x00
+    ldi r17, 0x00
+    ldi r18, 0x00
+    ldi r19, 0x00
+1:
+    mov r16, r19
+    mov r17, r18
+    rcall LCD_GDRAM_ADDR
+
+;; Send the bytes
+
+;; Send the bytes.
+
+2:
+    mov r16, r20
+    mov r17, r20
+    rcall LCD_GDRAM_VAL
+
+
+
+;; Decrement and check if the vertical counter is in zero.
+
+
+    inc r18
+    cpi r18, 16
+    brne 2b
+
+
+
+;; Decrement and check if the horizontal counter is in zero. If not, restore the vertical counter and repeat.
+
+
+    inc r19
+    ldi r18, 0
+
+    cpi r19, 64
+    brne 1b
+
+;; End subroutine
+
+
+    pop r20
+    pop r19
+    pop r18
+    pop r17
+    ret
+
+;; Begin subroutine
+
+LCD_HOME:
+    push r16
+    push r17
+
+;; Send the command
+
+    ldi r16, 0x02
+    ldi r17, 0x00
+    rcall LCD_INST
+
+;; End Subroutine
+
+    pop r17
+    pop r16
+    ret
+
+;; Begin subroutine
+
+LCD_CLEAR:
+    push r16
+    push r17
+
+;; Send the command
+
+    ldi r16, 0x01
+    ldi r17, 0x00
+    rcall LCD_INST
+
+;; End Subroutine
+
+    pop r17
+    pop r16
+    ret

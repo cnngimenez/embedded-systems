@@ -664,14 +664,316 @@ Send the command following command:
 #+END_SRC
 
 
-** TODO Set GDRAM Address
-- State "TODO"       from              [2019-08-14 Wed 13:26]
+** Set Text Mode
+#+BEGIN_SRC asm
+LCD_TMODE:
+    push r16
+    push r17
+#+END_SRC
 
+#+BEGIN_SRC asm
+    ldi r16, 0b00110100 ;; Enable extended Inst. Set.
+    ldi r17, 0x00
+    rcall LCD_INST
+    ldi r16, 0b00110100 ;; Enable extended Inst. Set.
+    ldi r17, 0x00
+    rcall LCD_INST
+    ldi r16, 0b00110000 ;; Enable extended Inst. Set.
+    ldi r17, 0x00
+    rcall LCD_INST
+#+END_SRC
+
+#+BEGIN_SRC asm
+    pop r17
+    pop r16
+    ret
+#+END_SRC
+
+** Graphics 
+
+*** Set Graphic Mode
+#+BEGIN_SRC asm
+LCD_GMODE:
+    push r16
+    push r17
+#+END_SRC
+
+First, set the extended instruction set.
+
+#+BEGIN_SRC asm
+    ldi r16, 0b00110100 ;; Enable extended Inst. Set.
+    ldi r17, 0x00
+    rcall LCD_INST
+#+END_SRC
+
+Now set the graphic command.
+
+#+BEGIN_SRC asm
+    ldi r16, 0b00110110 ;; Enable Graphic mode
+    ldi r17, 0x00
+    rcall LCD_INST
+#+END_SRC
+
+#+BEGIN_SRC asm
+    pop r17
+    pop r16
+    ret
+#+END_SRC
+
+*** Set GDRAM Address
+Define the ~LCD_GDRAM_ADDR~ subroutine.
+
+Parameters:
 - r16 :: Vertical address (from 6th to 0 bits)
 - r17 :: Horizontal address (from 4th to 0bits)
 
-** TODO Set GDRAM Value
-- State "TODO"       from              [2019-08-14 Wed 13:26]
+Warning: This commands leaves the graphic mode setted.
+
+
+**** Define the subroutine
+#+BEGIN_SRC asm
+LCD_GDRAM_ADDR:
+#+END_SRC
+
+**** Set the graphic mode
+#+BEGIN_SRC asm
+    rcall LCD_GMODE
+#+END_SRC
+**** Send the vertical value
+Always send the vertical value first. The ST7920 will be waiting for the low value.
+
+#+BEGIN_SRC asm
+    push r17
+
+    ori r16, 0b10000000
+    ldi r17, 0x00
+    rcall LCD_INST
+    
+    pop r17
+#+END_SRC
+
+**** Send the horizontal value
+
+#+BEGIN_SRC asm
+    push r16
+    push r17
+
+    mov r16, r17
+    ori r16, 0b10000000
+    ldi r17, 0x00
+    rcall LCD_INST
+
+    pop r17
+    pop r16
+#+END_SRC
+
+
+**** End Subroutine
+#+BEGIN_SRC asm
+    ret
+#+END_SRC
+
+
+*** Set GDRAM Value
+This section defines the ~LCD_GDRAM_VAL~ subroutine.
+
+Parameters:
+- r16 :: High value.
+- r17 :: Low value.
+
+Warning: This subroutine leaves the graphical mode setted on the LCD.
+
+**** Begin subroutine
+#+BEGIN_SRC asm
+LCD_GDRAM_VAL:
+#+END_SRC
+
+**** Send values
+#+BEGIN_SRC asm
+    push r17
+
+    ;; Send high value
+    ldi r17, 0x01
+    rcall LCD_INST
+
+    pop r17
+
+    ;; Send low value
+    mov r16, r17
+    ldi r17, 0x01
+    rcall LCD_INST
+#+END_SRC
+
+**** Return from subroutine
+#+BEGIN_SRC asm
+    ret
+#+END_SRC
+
+*** Move from RAM to GDRAM
+This section defines the ~LCD_COPY_GDRAM~. It copies the content from the RAM to the LCD's GDRAM.
+
+Parameters:
+- XL, XH :: RAM position.
+- r16 :: Width to position on the LCD.
+- r17 :: Height.
+- r18 :: Starting X on the LCD.
+- r19 :: Starting Y on the LCD.
+
+This subroutine copies a secuential bytes to the space dictated by the parameters.
+
+**** Define subroutine
+#+BEGIN_SRC asm
+LCD_COPY_GDRAM:
+    push r20
+    push r21
+    push r22
+    push r23
+#+END_SRC
+
+**** Preserve some registers
+r16 and r17 registers will be used for parameters. Move their values to another place.
+
+|--------------+-----------+----------------|
+| New register | previous  | Desc.          |
+|--------------+-----------+----------------|
+| r18          | r18       | X              |
+| r19          | r19       | Y              |
+| r20          | r16       | Width          |
+| r21          | r17       | Height         |
+| r22          | r16 / r20 | Width counter  |
+| r23          | r17 / r21 | Height counter |
+|--------------+-----------+----------------|
+
+#+BEGIN_SRC asm
+    mov r20, r16
+    mov r21, r17
+    mov r22, r16
+    mov r23, r17
+#+END_SRC
+
+**** Position the GDRAM
+Position the GDRAM cursor.
+
+#+BEGIN_SRC asm
+.position:
+    mov r16, r19
+    mov r17, r18
+    rcall LCD_GDRAM_ADDR
+#+END_SRC
+
+**** Send bytes
+Take one byte from RAM and send it to the LCD. Repeat until width-bytes has been transmitted.
+
+#+BEGIN_SRC asm
+1:
+    ld r16, X+
+    ld r17, X+
+    rcall LCD_GDRAM_VAL
+
+    dec r22 ;; Decrement width counter
+    dec r22
+    cpi r22, 0x00
+    brne 1b
+#+END_SRC
+
+**** Increment the vertical position
+Decrement the height value, and increment the vertical position.
+
+Restore the width counter with the total width.
+
+If the height value reaches zero, then end.
+
+#+BEGIN_SRC asm
+    dec r23 ;; Decrement height counter
+    inc r19
+
+    mov r22, r20 ;; Restore width counter
+
+    cpi r23, 0x00
+    brne .position
+#+END_SRC
+
+**** End subroutine
+#+BEGIN_SRC asm
+    pop r23
+    pop r22
+    pop r21
+    pop r20
+    ret
+#+END_SRC
+
+*** Clear GDRAM Command
+This section define the ~LCD_GCLEAR~ subroutine. It fills the GDRAM with a given byte pattern.
+
+Parameters:
+- r16 :: Byte used to fill the GDRAM
+
+**** Begin subroutine
+#+BEGIN_SRC asm
+LCD_GCLEAR:
+    push r17
+    push r18
+    push r19
+    push r20
+    mov r20, r16
+#+END_SRC
+
+**** Starting Position 
+Set the counters at the initial values.
+
+- r18 :: Vertical counter.
+- r19 :: Horizontal counter.
+
+#+BEGIN_SRC asm
+    ldi r16, 0x00
+    ldi r17, 0x00
+    ldi r18, 0x00
+    ldi r19, 0x00
+1:
+    mov r16, r19
+    mov r17, r18
+    rcall LCD_GDRAM_ADDR
+#+END_SRC
+
+**** Send the bytes
+
+Send the bytes.
+#+BEGIN_SRC asm
+2:
+    mov r16, r20
+    mov r17, r20
+    rcall LCD_GDRAM_VAL
+#+END_SRC
+
+Decrement and check if the vertical counter is in zero.
+
+#+BEGIN_SRC asm
+    inc r18
+    cpi r18, 16
+    brne 2b
+#+END_SRC
+
+Decrement and check if the horizontal counter is in zero. If not, restore the vertical counter and repeat.
+
+#+BEGIN_SRC asm
+    inc r19
+    ldi r18, 0
+
+    cpi r19, 64
+    brne 1b
+#+END_SRC
+
+**** End subroutine
+
+#+BEGIN_SRC asm
+    pop r20
+    pop r19
+    pop r18
+    pop r17
+    ret
+#+END_SRC
+
+
 
 ** TODO Cursor Control Command
 ** Home Command
@@ -993,6 +1295,19 @@ For the AtMega 2560 processor.
 .include "../../registers-atmega2560-inc.asm"
 #+END_SRC
 
+** Read Only Data
+
+#+BEGIN_SRC asm
+.section .rodata
+.face:	
+	.byte 0xff, 0xff, 0xff, 0xff
+	.byte 0xff, 0xff, 0xff, 0xff
+	.byte 0xff, 0xff, 0xff, 0xff
+	.byte 0xff, 0xff, 0xff, 0xff
+	.byte 0x00, 0x00, 0x00, 0x00
+#+END_SRC
+
+
 ** Main program
 
 #+BEGIN_SRC asm
@@ -1000,6 +1315,28 @@ For the AtMega 2560 processor.
 
 RESET:
 #+END_SRC
+
+** Copy Data to RAM
+
+#+BEGIN_SRC asm
+	ldi ZL, lo8(STATIC_DATA)
+	ldi ZH, hi8(STATIC_DATA)
+	ldi XL, lo8(.face)
+	ldi XH, hi8(.face)
+
+1:
+	lpm r16, Z+
+	cpi r16, 0x00
+	breq .cont_program
+	
+	st X+, r16
+	rjmp 1b
+
+.cont_program:
+	st X+, r16
+
+#+END_SRC
+
 
 ** Initialize
 
@@ -1030,10 +1367,7 @@ L led turns on and off to show the user that the LCD has been initialized.
 
 ** Write something on the LCD
 #+BEGIN_SRC asm
-    ldi r16, 0b00110100 ;; Enable extended Inst. Set.
-    ldi r17, 0x00
-    rcall LCD_INST
-    
+      
     ldi r16, 0b00110110 ;; Enable Graphics
     ldi r17, 0x00
     rcall LCD_INST
@@ -1047,45 +1381,17 @@ L led turns on and off to show the user that the LCD has been initialized.
     ldi r17, 0x00
     rcall LCD_INST
 
+1:
+	ldi XL, lo8(.face)
+	ldi XH, hi8(.face)
+	ldi r16, 4
+	ldi r17, 4
+	ldi r18, 0
+	ldi r19, 0
+	rcall LCD_COPY_GDRAM
+	
+	rjmp END
 
-    ;; Exit extended inst. set
-    ldi r16, 0b00110010
-    ldi r17, 0x00
-    rcall LCD_INST
-    ;; Clear
-    ldi r16, 0x01
-    ldi r17, 0x00
-    rcall LCD_INST
-    ldi r16, 0b00110110 ;; Enable Graphics
-    ldi r17, 0x00
-    rcall LCD_INST
-
-    
-    ;; Draw
-    ldi r17, 0b00000001
-    ldi r16,0b00100010
-    rcall LCD_INST
-    ldi r17, 0x01
-    ldi r16,0b10011001
-    rcall LCD_INST
-    ldi r17, 0b00000001
-    ldi r16,0b00100010
-    rcall LCD_INST
-    ldi r17, 0x01
-    ldi r16,0b10011001
-    rcall LCD_INST
-    ldi r17, 0b00000001
-    ldi r16,0b00100010
-    rcall LCD_INST
-    ldi r17, 0x01
-    ldi r16,0b10011001
-    rcall LCD_INST
-    ldi r17, 0b00000001
-    ldi r16,0b00100010
-    rcall LCD_INST
-    ldi r17, 0x01
-    ldi r16,0b10011001
-    rcall LCD_INST
 #+END_SRC
 
 
@@ -1173,6 +1479,11 @@ END:
 
 #+END_SRC
 
+** STATIC_DATA reference
+
+#+BEGIN_SRC asm
+STATIC_DATA:
+#+END_SRC
 
 * Meta     :noexport:
 
