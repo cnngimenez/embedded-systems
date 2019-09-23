@@ -1,6 +1,6 @@
 
 * Introduction
-The I2C protocol is a two wired one that communicates between one to many devices.
+The I2C protocol is a two wired one that communicates between many devices.
 
 ** Roles
 One of the devices must be a master and the other slaves. Also, the role of transmitter and receiver must be setted at first by the master. Thus, there are four possible states for a device:
