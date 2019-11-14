@@ -1,0 +1,818 @@
+#+property: header-args :comments org :padline yes :tangle dht22-lib.asm
+
+* Introduction
+The DHT22 is an improvement of the DHT12. It is a temperature and humidity sensor. DHT12 supports two protocols I2C and its own One-Wire one. On the other hand, DHT22 only support the One-Wire one.
+
+[[file:imgs/DHT22-front.jpg]]
+
+** Pins
+[[file:imgs/DHT22-pins.jpg]]
+
+The hardware interface is provided by three pins. One extra pin is not connected.
+
+- Vcc :: 3.3V to 6V input power.
+- Data :: Digital I/O, use a 4.7K\Omega or 10K\Omega  pull up resistor.
+- Not Connected :: Should be leaved unconnected.
+- GND :: Connect to ground at the Arduino board.
+
+Electricity details:
+- Voltage :: 3.3V to 6V power and I/O.
+- Current :: 1.5mA maximum.
+
+Detection details:
+- Humidity range :: 0 to 100%.
+- Temperature range :: -40 to 80^{\circ} Degrees.
+- Accuracy :: \pm0.5^{\circ}C accuracy.
+
+The sampling rate is up to 0.5Hz, i.e. once every 2 seconds.
+
+** The One-Wire Protocol
+
+The signal starts with a logical 1 (high value). Consider the MCU is the Arduino board.
+
+The MCU starts the sequence by sending a low-level signal. Then the DHT22 answers and returns the data sequence. The data consists of 40 bits
+
+The starting sequence is as follows.
+
+1. The MCU lower the signal for at least 1ms.
+2. The MCU waits to 20 to 40\mu{}s. The data is again high.
+3. The DHT22 sends a low-voltage level for 80\mu{}s.
+4. The DHT22 sends a high level for 80\mu{}s.
+
+The data sequence is as follows. For each bit transmitted:
+1. The DHT22 lowers the voltages for 50\mu{}s.
+2. Depending on the bit it sends:
+   - 26\mu{}s to 28\mu{}s high value if the bit value is zero.
+   - 70\mu{}s high value if the bit value is one.
+
+The order of the data bits is received as indicated below:
+1. Relative Humidity:
+   1. 8 bit of integer data first.
+   2. 8 bit of decimal data second.
+2. Temperature:
+   1. 8 bit of integer data first.
+   2. 8 bit of decimal data second.
+3. Checksum:
+   1. 8 bit of checksum data
+
+Checksum is the sum of all bytes received.
+
+* The MCU Pinout
+The DHT22 should be connected to the PB2 at the Arduino Board
+
+|   | Model        | ATMegaPort | Board Pin |
+| / |              | <          |           |
+|---+--------------+------------+-----------|
+|   | Arduino UNO  | PB2        |        10 |
+|   | Arduino Mega | PB2        |        51 |
+|---+--------------+------------+-----------|
+
+Pull up resistors are inside the ATmega MCU. They can be activated using the 4th bit called Pull-Up Disable (PUD) bit at the MCU Control Register (also MCUCR which is at 0x55 memory address).
+
+The following table shows how to configure a port using the DDR and the PORT register.
+
+|   | DDxn | PORTxn | PUD | I/O    | Pull-up | Comment                 |
+| / |    < |        | >   | <      |         | >                       |
+|---+------+--------+-----+--------+---------+-------------------------|
+|   |    0 |      0 | X   | Input  | no      | Tri-state (Hi-Z)        |
+|   |    0 |      1 | 0   | Input  | yes     | Pxn will source current |
+|   |    0 |      1 | 1   | Input  | no      | Tri-state (Hi-Z)        |
+|   |    1 |      0 | X   | Output | no      | Output low (Sink)       |
+|   |    1 |      1 | X   | Output | no      | Output high (Source)    |
+|---+------+--------+-----+--------+---------+-------------------------|
+
+When (DDxn, Portxn PUD) = (0, 1, 0) the Pxn will source current if ext. pulled low. 
+
+
+* License
+#+BEGIN_SRC asm
+;; Copyright 2019 Christian Gimenez
+	   
+;; Author: Christian Gimenez
+
+;; dht22-lib.asm
+	   
+;; This program is free software: you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
+	   
+;; This program is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+	   
+;; You should have received a copy of the GNU General Public License
+;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#+END_SRC
+
+* Auxiliary subroutines
+The following are auxiliary subroutines.
+
+** Set the pin in output mode
+Activating the output mode on the port means:
+
+- Set DDxn in 1.
+- Use the PORTxn in 1 or 0.
+
+#+BEGIN_SRC asm
+_OUTPUT_MODE:
+    push r16
+
+    lds r16, DDRB
+    set
+    bld r16, 2 ;; PB2 output mode
+
+    sts DDRB, r16
+
+    pop r16
+    ret
+#+END_SRC
+
+** Set the pin in input mode
+#+BEGIN_SRC asm
+_INPUT_MODE:
+    push r16
+
+    lds r16, DDRB
+    clt
+    bld r16, 2 ;; PB2 output mode
+
+    sts DDRB, r16
+
+    pop r16
+    ret
+#+END_SRC
+
+** Send a digital one
+
+#+BEGIN_SRC asm
+_HIGH:
+    sbi OPORTB, 2
+    ret
+#+END_SRC
+
+** Send a digital zero
+
+#+BEGIN_SRC asm
+_LOW:
+    cbi OPORTB, 2
+    ret
+#+END_SRC
+
+** Enable the pull-up resistor globaly
+#+BEGIN_SRC asm
+_ENABLE_PULLUP:
+    push r16
+
+    lds r16, MCUCR
+    clt
+    bld r16, 4
+    sts MCUCR, r16
+
+    pop r16
+    ret
+#+END_SRC
+
+** Disable the pull-up resistor globaly
+#+BEGIN_SRC asm
+_DISABLE_PULLUP:
+    push r16
+
+    lds r16, MCUCR
+    set
+    bld r16, 4
+    sts MCUCR, r16
+
+    pop r16
+    ret
+#+END_SRC
+
+
+* Send the start sequence to the DHT22
+This subroutine will set the pin mode to output and send a zero for 1ms.
+
+No parameters are defined in this subroutine and no return value is needed.
+
+** Declare the Subroutine
+
+#+BEGIN_SRC asm
+DHT_START:
+    push r16
+#+END_SRC
+
+** Send the signal
+
+Start the pull-up mode on the port. According to the ATmega datasheet DDB2 must be setted to zero, PORTB2 must be 1 and PUD (in MCUCR) to 0.
+
+#+BEGIN_SRC asm
+    rcall _ENABLE_PULLUP
+    rcall _INPUT_MODE
+    rcall _HIGH
+
+    ldi r16, 1
+    rcall WAITMS
+#+END_SRC
+
+Now, start the star sequence: 1 low and then high
+
+#+BEGIN_SRC asm
+    rcall _OUTPUT_MODE
+    rcall _LOW
+
+    ldi r16, 2
+    rcall WAITMS
+
+    rcall _INPUT_MODE
+    rcall _HIGH
+    ;; ldi r16, 1
+    ;; rcall WAITMS
+#+END_SRC
+
+** Receives the DHT22 answer
+
+Set the pin into input mode.
+
+#+BEGIN_SRC asm
+    rcall _INPUT_MODE
+    rcall _LOW
+#+END_SRC
+
+The DHT22 sends a low voltage for 80\mu{}s.
+
+#+BEGIN_SRC asm
+1:
+    lds r16, PINB
+    sbrs r16, 2
+    rjmp 1b
+#+END_SRC
+
+Then, the DHT22 sends a high voltage for 80\mu{}s.
+
+#+BEGIN_SRC asm
+2:
+    lds r16, PINB
+    sbrc r16, 2
+    rjmp 2b
+#+END_SRC
+
+** Return
+#+BEGIN_SRC asm
+    pop r16
+    ret
+#+END_SRC
+
+* Read a Bit of data
+Read a bit of data from the DHT22 data pin.
+
+Return the bit received on R20 register. No parameters needed.
+
+** Declare subroutine
+#+BEGIN_SRC asm
+_read_bit:
+    push r16
+#+END_SRC
+
+** Activate input mode and pull-up                                :noexport:
+There's no need for enabling the pull up here.
+#+BEGIN_SRC asm :tangle no
+    rcall _ENABLE_PULLUP
+    rcall _INPUT_MODE
+    rcall _HIGH
+#+END_SRC
+
+** Ignore the lower value
+The DHT22 lower the voltage for 50\mu{}s each bit.
+
+#+BEGIN_SRC asm
+1:
+    lds r16, PINB
+    sbrs r16, 2 ;; PB2
+    rjmp 1b
+#+END_SRC
+
+** First approach
+:PROPERTIES:
+:header-args: :tangle no
+:END:
+*** Count the time for the high value
+After that, the sensor sends a high value for 28\mu{}s if it is a zero or 70\mu{}s if it is a one.
+
+Simply, the program should wait for more 28\mu{}s but less that 70\mu{}s, if the value is still high, it is a one. If it is not, is zero and end inmediately.
+
+The waiting must be calculated according to the amount of instructions executed. The Arduino board has a 16Mhz (16000000 cicles per seconds) clock. Each ~add~ instruction has one cicle (~adiw~ is 2 cicles), and thus $\frac{1}{16000000} = 6.25e^{-8} s = 6.25e^{-5} ms = 0.0625 \mu{}s = 62.5 ns$.
+
+For waiting 28\mu{}s it is needed $\frac{28000ns}{62.5 ns/c} = 448 c$. The loop should use the add, cpi and brne instructions and thus, it must repeat 448/3 = 149.33 \approx 150 times to get 448 cicles.
+
+#+BEGIN_SRC asm
+    ldi r16, 0
+2:
+    inc r16
+    cpi r16, 150
+    brne 2b
+#+END_SRC
+
+*** Check if the input is still high
+This snippets checks if the input is high or low and jump to the portion of code according to this value.
+
+#+BEGIN_SRC asm
+    lds r16, PINB
+    sbrc r16, 2 ;; PB2
+    rjmp 3f ;; has high value
+    rjmp 4f ;; has low value
+#+END_SRC
+
+*** If input is high
+If the input is still high then wait until is zero, set the return value to 1 and jump to the return code.
+
+#+BEGIN_SRC asm
+3:
+    lds r16, PINB
+    sbrc r16, 2 ;; PB2
+    rjmp 3b
+
+    ldi r20, 1
+    rjmp 5f
+#+END_SRC
+
+*** If input is down then zero
+There is no need to wait. Simply, set 0 at the return value. 
+
+#+BEGIN_SRC asm
+4:
+    ldi r20, 0
+#+END_SRC
+
+** Second approach
+In this approach, the ATmega will count for the amount of cicles that the digital pin is high. Then, it compares if the amount is more than a fixed limit. In case it is greater, then it is a digital 1.
+
+*** Save temporal registers
+#+BEGIN_SRC asm
+    push XL
+    push XH
+#+END_SRC
+
+*** Initialize counter
+#+BEGIN_SRC asm
+    ldi XL, 0
+    ldi XH, 0
+#+END_SRC
+
+*** Count the amount of cicles
+The following snippet add one to the counter and repeat until the PINB 2nd bit is cleared.
+
+#+BEGIN_SRC asm
+1:
+    adiw X, 1
+    lds r16, PINB
+    sbrc r16, 2
+    rjmp 1b
+#+END_SRC
+
+Counting the amount of cicles is per loop is: 2 + 2 + 2 + 1 = 7. This means that each time X increments one it counts 7 cicles approx.
+
+The amount of cicles is 448c for 28\mu{}s. And 448/7 = 64 loops (X = 64). However, 70\mu{}s is 1120 cicles and 1120/7 = 160 loops. A good measure is if X > 100 then it is a logic 1.
+
+#+BEGIN_SRC asm
+    cpi XL, 100
+    brlo 2f
+    ldi r20, 1
+    rjmp 3f
+2:
+    ldi r20, 0
+#+END_SRC
+
+*** Restore used registers
+#+BEGIN_SRC asm
+3:
+    pop XH
+    pop XL
+#+END_SRC
+
+** Return
+#+BEGIN_SRC asm
+5:
+    pop r16
+    ret
+#+END_SRC
+
+* Read a byte from the sensor
+Read byte loop. Return the value at r20 register.
+
+** Declare subroutine
+
+- r17 :: Store the bit index.
+- r18 :: Store the temporal return value.
+
+#+BEGIN_SRC asm
+_read_byte:
+    push r17
+    push r18
+#+END_SRC
+
+** Initialize variables
+R17 stores the bit index for the r18 register.
+
+#+BEGIN_SRC asm
+    ldi r18, 0
+    ldi r17, 0
+#+END_SRC
+
+** Read loop
+
+#+BEGIN_SRC asm
+1:
+#+END_SRC
+
+*** Read a bit
+The read bit subroutine ignores the low value. The r20 register has the return value.
+
+After reading the bit, increment the index.
+
+#+BEGIN_SRC asm
+    rcall _read_bit
+    inc r17
+#+END_SRC
+
+*** Add bit to the return value
+First, shift left the temporal value and apply a logical or.
+
+#+BEGIN_SRC asm
+    lsl r18
+    or r18, r20
+#+END_SRC
+
+*** Check if it is the 8th bit readed
+Check if r17 has the 8th bit. If it is not, repeat the read-bit loop 
+
+#+BEGIN_SRC asm
+    cpi r17, 8
+    brne 1b
+#+END_SRC
+
+** Return
+Prepare the return value, restore registers and return.
+
+#+BEGIN_SRC asm
+    mov r20, r18
+
+    pop r18
+    pop r17
+    ret
+#+END_SRC
+
+* Receive data
+Once sending the start message, the DHT22 will begin to emit the data.
+
+Parameters:
+
+- Z :: The memory address where to store the readed data.
+
+The memory store the following data. 
+
+- Z+0 :: The RH (Relative Humidity) integer value.
+- Z+1 :: The RH decimal value.
+- Z+2 :: The temperature integer value.
+- Z+3 :: The temperature decimal value.
+- Z+4 :: The checksum.
+ 
+** Declare the subroutine
+#+BEGIN_SRC asm
+DHT_RECEIVE:
+#+END_SRC
+
+** Set the input mode
+#+BEGIN_SRC asm
+    rcall _INPUT_MODE
+#+END_SRC
+
+** Read RH integer
+Read the first data and store it in memory.
+
+#+BEGIN_SRC asm
+    rcall _read_byte
+    st Z, r20
+#+END_SRC
+
+** Read RH decimal
+#+BEGIN_SRC asm
+    rcall _read_byte
+    std Z+1, r20
+#+END_SRC
+
+** Read temperature integer
+#+BEGIN_SRC asm
+    rcall _read_byte
+    std Z+2, r20
+#+END_SRC
+
+** Read temperature decimal
+#+BEGIN_SRC asm
+    rcall _read_byte
+    std Z+3, r20
+#+END_SRC
+
+** Read Checksum
+#+BEGIN_SRC asm
+    rcall _read_byte
+    std Z+4, r20
+#+END_SRC
+
+** Return 
+#+BEGIN_SRC asm
+    ret
+#+END_SRC
+
+
+
+
+
+
+* Test
+:PROPERTIES:
+:header-args: :mkdirp yes :comments org :padline yes :tangle tests/dht22/main.asm
+:END:
+** License
+#+BEGIN_SRC asm
+;; Copyright 2019 Christian Gimenez
+	   
+;; Author: Christian Gimenez
+
+;; main.asm
+	   
+;; This program is free software: you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
+	   
+;; This program is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+	   
+;; You should have received a copy of the GNU General Public License
+;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#+END_SRC
+
+** Including needed files
+#+BEGIN_SRC asm
+.include "../../vector-atmega2560-inc.asm"
+.include "../../registers-atmega2560-inc.asm"
+#+END_SRC
+
+** Definind some memory address
+The following are linked addresses.
+
+#+BEGIN_SRC asm
+.data
+sensord:
+#+END_SRC
+
+
+** Starting main routine
+#+BEGIN_SRC asm
+.text
+RESET:
+#+END_SRC
+
+** Set the memory
+The Z registers will store the memory address where the readed data is saved. 
+
+#+BEGIN_SRC asm
+    ldi ZL, lo8(sensord)
+    ldi ZH, hi8(sensord)
+#+END_SRC
+
+** Initialize libraries
+Initialize USART library and send something for testing purposes.
+
+#+BEGIN_SRC asm
+    rcall USART_INIT
+    ldi r18, 'h'
+    rcall USART_PUT
+#+END_SRC
+
+** Read a data
+#+BEGIN_SRC asm
+main_loop:
+    rcall DHT_START
+
+    rcall DHT_RECEIVE
+
+    ldi r18, 's'
+    rcall USART_PUT
+
+    
+    ldi r18, '\n'
+    rcall USART_PUT
+    ldi r18, '\r'
+    rcall USART_PUT
+#+END_SRC
+
+** Get data from memory
+
+*** Get RH
+#+BEGIN_SRC asm
+    ld XH, Z
+    ldd XL, Z+1
+    rcall USART_HEX
+
+    ldi r18, ' '
+    rcall USART_PUT
+#+END_SRC
+
+*** Get T
+#+BEGIN_SRC asm
+    ldd XH, Z+2
+    ldd XL, Z+3
+    rcall USART_HEX
+
+    ldi r18, ' '
+    rcall USART_PUT
+#+END_SRC
+
+*** Checksum
+#+BEGIN_SRC asm
+    ldd XH, Z+4
+    ldi XL, 0xff
+    rcall USART_HEX
+
+    ldi r18, ' '
+    rcall USART_PUT
+#+END_SRC
+
+** End program
+#+BEGIN_SRC asm
+    ldi r18, 1
+    rcall WAIT
+    rjmp main_loop
+#+END_SRC
+
+** Include libraries
+#+BEGIN_SRC asm
+.include "../../dht22-lib.asm"
+.include "../../usart-lib.asm"
+.include "../../wait-lib.asm"
+#+END_SRC
+
+** Interruption  handlers
+#+BEGIN_SRC asm
+;; Vector Handlers
+
+
+INT0:        ; IRQ0 Handler 
+INT1:        ; IRQ1 Handler 
+INT2:        ; IRQ2 Handler 
+INT3:        ; IRQ3 Handler 
+INT4:        ; IRQ4 Handler 
+INT5:        ; IRQ5 Handler 
+INT6:        ; IRQ6 Handler 
+INT7:        ; IRQ7 Handler 
+PCINT0:      ; PCINT0 Handler 
+PCINT1:      ; PCINT1 Handler 
+PCINT2:      ; PCINT2 Handler 
+WD:          ; Watchdog Timeout Handler 
+TIM2_COMPA:  ; Timer2 CompareA Handler 
+TIM2_COMPB:  ; Timer2 CompareB Handler 
+TIM2_OVF:    ; Timer2 Overflow Handler 
+TIM1_CAPT:   ; Timer1 Capture Handler 
+TIM1_COMPA:  ; Timer1 CompareA Handler 
+TIM1_COMPB:  ; Timer1 CompareB Handler 
+TIM1_COMPC:  ; Timer1 CompareC Handler 
+TIM1_OVF:    ; Timer1 Overflow Handler 
+TIM0_COMPA:  ; Timer0 CompareA Handler 
+TIM0_COMPB:  ; Timer0 CompareB Handler 
+TIM0_OVF:    ; Timer0 Overflow Handler 
+SPI_STC:     ; SPI Transfer Complete Handler 
+USART0_RXC:  ; USART0 RX Complete Handler 
+USART0_UDRE: ; USART0,UDR Empty Handler 
+USART0_TXC:  ; USART0 TX Complete Handler 
+ANA_COMP:    ; Analog Comparator Handler 
+ADC:         ; ADC Conversion Complete Handler 
+EE_RDY:      ; EEPROM Ready Handler 
+TIM3_CAPT:   ; Timer3 Capture Handler 
+TIM3_COMPA:  ; Timer3 CompareA Handler 
+TIM3_COMPB:  ; Timer3 CompareB Handler 
+TIM3_COMPC:  ; Timer3 CompareC Handler 
+TIM3_OVF:    ; Timer3 Overflow Handler 
+USART1_RXC:  ; USART1 RX Complete Handler 
+USART1_UDRE: ; USART1,UDR Empty Handler 
+USART1_TXC:  ; USART1 TX Complete Handler 
+TWI:         ; 2-wire Serial Handler 
+SPM_RDY:     ; SPM Ready Handler 
+TIM4_CAPT:   ; Timer4 Capture Handler 
+TIM4_COMPA:  ; Timer4 CompareA Handler 
+TIM4_COMPB:  ; Timer4 CompareB Handler 
+TIM4_COMPC:  ; Timer4 CompareC Handler 
+TIM4_OVF:    ; Timer4 Overflow Handler 
+TIM5_CAPT:   ; Timer5 Capture Handler 
+TIM5_COMPA:  ; Timer5 CompareA Handler 
+TIM5_COMPB:  ; Timer5 CompareB Handler 
+TIM5_COMPC:  ; Timer5 CompareC Handler 
+TIM5_OVF:    ; Timer5 Overflow Handler 
+USART2_RXC:  ; USART2 RX Complete Handler 
+USART2_UDRE: ; USART2,UDR Empty Handler 
+USART2_TXC:  ; USART2 TX Complete Handler 
+USART3_RXC:  ; USART3 RX Complete Handler 
+USART3_UDRE: ; USART3,UDR Empty Handler 
+USART3_TXC:  ; USART3 TX Complete Handler
+
+;; __________________________________________________
+    reti
+END:
+    nop
+    break
+    rjmp END
+
+#+END_SRC
+
+
+* Results
+
+#+begin_example
+80A9 8081 AC
+
+128 169 180 181
+
+80AC 0081 2E
+128 172 0 181
+
+1000 0001
+
+8    0    A    C     0    0    8    1      2   E
+1000 0000 1010 1100  0000 0000 1000 0001  0010 1110
+0001 0000 0101 0011  0000 0000 0001 1000  0100 0111
+
+                     
+
+80AC 0081 2E
+1053 0018 47
+
+0000 0010+1000 1100+0000 0001+0101 1111=1110 1110
+02 + 8C + 01 + 5f = EE
+
+1AD
+1010 1101
+
+
+
+Temp actual
+25.60
+25.70
+Hex:
+19 46
+0001 1001   0100 0110
+
+Hum.
+35.50%
+23   32
+0010 0011 0011 0010
+
+
+
+Counting cicles:
+
+80B1 0082 34
+
+1000 0000
+#+end_example
+
+* Meta     :noexport:
+
+  # ----------------------------------------------------------------------
+  #+TITLE:  DHT22
+  #+AUTHOR: Christian Gimenez
+  #+DATE:   10 Nov 2019
+  #+EMAIL:
+  #+DESCRIPTION: 
+  #+KEYWORDS: 
+
+  #+STARTUP: inlineimages hidestars content hideblocks entitiespretty indent fninline latexpreview
+  #+TODO: TODO(t!) CURRENT(c!) PAUSED(p!) | DONE(d!) CANCELED(C!@)
+  #+OPTIONS:   H:3 num:t toc:t \n:nil @:t ::t |:t ^:{} -:t f:t *:t <:t
+  #+OPTIONS:   TeX:t LaTeX:t skip:nil d:nil todo:t pri:nil tags:not-in-toc tex:imagemagick
+  #+LINK_UP:   
+  #+LINK_HOME: 
+  #+XSLT:
+
+  # -- HTML Export
+  #+INFOJS_OPT: view:info toc:t ftoc:t ltoc:t mouse:underline buttons:t path:libs/org-info.js
+  #+EXPORT_SELECT_TAGS: export
+  #+EXPORT_EXCLUDE_TAGS: noexport
+  #+HTML_LINK_UP: index.html
+  #+HTML_LINK_HOME: index.html
+
+  # -- For ox-twbs or HTML Export
+  #+HTML_HEAD: <link href="libs/bootstrap.min.css" rel="stylesheet">
+  #+HTML_HEAD: <script src="libs/jquery.min.js"></script> 
+  #+HTML_HEAD: <script src="libs/bootstrap.min.js"></script>
+  #+LANGUAGE: en
+
+  # Local Variables:
+  # org-hide-emphasis-markers: t
+  # org-use-sub-superscripts: "{}"
+  # fill-column: 80
+  # visual-line-fringe-indicators: t
+  # ispell-local-dictionary: "british"
+  # org-src-preserve-indentation: t
+  # End:
