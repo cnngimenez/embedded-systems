@@ -60,3 +60,37 @@ pop r19
 pop r18
 pop r17
   ret			; UPPER waiting limit achieved
+
+WAITMS:
+    push r17
+
+ldi r17, 0
+
+1: 
+    rcall _onems
+
+    inc r17
+    cp r17, r16
+    brne 1b
+
+pop r17
+ret
+
+_onems:
+    push XL
+    push XH
+
+ldi XL, 0
+ldi XH, 0
+
+1:
+    adiw X, 1          ;; 2c
+
+    cpi XL, lo8(2635)  ;; 1c
+    brne 1b            ;; 1/2c
+    cpi XH, hi8(2635)  ;; 1c
+    brne 1b            ;; 1/2c
+
+pop XH
+pop XL
+ret

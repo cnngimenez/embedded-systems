@@ -33,7 +33,8 @@ The register r17 will count from 0 to 255, the r18 will help on counting up to 6
 ;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #+END_SRC
 
-* Declare the subroutine
+* WAIT 
+** Declare the subroutine
 Declare the WAIT function and save the register that will be used locally.
 
 #+BEGIN_SRC asm
@@ -45,7 +46,7 @@ WAIT:
     push r19
 #+END_SRC
 
-* Initialize registers
+** Initialize registers
 
 Supposedly, the following register must be saved in memory. This saves the date in case of the main routine uses them. In this case, these registers were not used in the main program and use it directly.
 
@@ -57,7 +58,7 @@ Zero the needed registers.
 	ldi r19, 0
 #+END_SRC
 
-* First loop
+** First loop
 This first loop will increment the r17 from 0x00 to 0xff.
 
 To begin with, some ~nop~ instructions for giving more time.
@@ -81,7 +82,7 @@ Increment the register by one and compare if it reached 0xff. If it reaches the 
 	rjmp 1b
 #+END_SRC
  
-* Second part
+** Second part
 Reset the r17 to zero for starting the first loop again.
 
 #+BEGIN_SRC asm
@@ -98,7 +99,7 @@ Increment r18 and check if reached 0xff. If it reaches then increment the r19, i
 	brne 1b
 #+END_SRC
 
-* Third part
+** Third part
 Same as the second part, reset the r18.
 
 #+BEGIN_SRC asm
@@ -114,7 +115,7 @@ Increment r19 and check if reached the desired amount, if not continue the loop,
 	brne 1b
 #+END_SRC
 
-* Return the subroutine
+** Return the subroutine
 Restore the registers and return.
 
 #+BEGIN_SRC asm
@@ -122,6 +123,82 @@ Restore the registers and return.
       pop r18
       pop r17
 	ret			; UPPER waiting limit achieved
+#+END_SRC
+
+
+
+* WAITMS
+Wait for an amount of ms.
+
+Parameters:
+- r16 :: The amount of ms.
+
+** Declare the subroutine
+
+- r17 :: The counter.
+
+#+BEGIN_SRC asm
+WAITMS:
+    push r17
+#+END_SRC
+
+** Initialize variables
+#+BEGIN_SRC asm
+    ldi r17, 0
+#+END_SRC
+
+** Start counting
+#+BEGIN_SRC asm
+1: 
+    rcall _onems
+
+    inc r17
+    cp r17, r16
+    brne 1b
+#+END_SRC
+
+** End subroutine
+#+BEGIN_SRC asm
+    pop r17
+    ret
+#+END_SRC
+
+** Protected OneMS
+For one millisecond (1000000ns / 62.5ns/c) = 16000 cicles.
+
+*** Declare subroutine
+#+BEGIN_SRC asm
+_onems:
+    push XL
+    push XH
+#+END_SRC
+
+*** Initialize
+#+BEGIN_SRC asm
+    ldi XL, 0
+    ldi XH, 0
+#+END_SRC
+
+*** Loop
+2635 repetitions * 6 cicles for sure is apporximately less than 1600.
+
+Adding the other cicles missing leads to near 1600 cicles.
+
+#+BEGIN_SRC asm
+1:
+    adiw X, 1          ;; 2c
+
+    cpi XL, lo8(2635)  ;; 1c
+    brne 1b            ;; 1/2c
+    cpi XH, hi8(2635)  ;; 1c
+    brne 1b            ;; 1/2c
+#+END_SRC
+
+*** Return
+#+BEGIN_SRC asm
+    pop XH
+    pop XL
+    ret
 #+END_SRC
 
 
