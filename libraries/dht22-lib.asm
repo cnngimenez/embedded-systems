@@ -121,10 +121,10 @@ DHT_START:
     ldi r16, 2
     rcall WAITMS
 
-    rcall _INPUT_MODE
+    ;; rcall _INPUT_MODE
     rcall _HIGH
-    ;; ldi r16, 1
-    ;; rcall WAITMS
+    ldi r16, 25
+    rcall WAITUS
 
 ;; Receives the DHT22 answer
 

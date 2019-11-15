@@ -223,10 +223,10 @@ Now, start the star sequence: 1 low and then high
     ldi r16, 2
     rcall WAITMS
 
-    rcall _INPUT_MODE
+    ;; rcall _INPUT_MODE
     rcall _HIGH
-    ;; ldi r16, 1
-    ;; rcall WAITMS
+    ldi r16, 25
+    rcall WAITUS
 #+END_SRC
 
 ** Receives the DHT22 answer
@@ -726,56 +726,6 @@ END:
 
 #+END_SRC
 
-
-* Results
-
-#+begin_example
-80A9 8081 AC
-
-128 169 180 181
-
-80AC 0081 2E
-128 172 0 181
-
-1000 0001
-
-8    0    A    C     0    0    8    1      2   E
-1000 0000 1010 1100  0000 0000 1000 0001  0010 1110
-0001 0000 0101 0011  0000 0000 0001 1000  0100 0111
-
-                     
-
-80AC 0081 2E
-1053 0018 47
-
-0000 0010+1000 1100+0000 0001+0101 1111=1110 1110
-02 + 8C + 01 + 5f = EE
-
-1AD
-1010 1101
-
-
-
-Temp actual
-25.60
-25.70
-Hex:
-19 46
-0001 1001   0100 0110
-
-Hum.
-35.50%
-23   32
-0010 0011 0011 0010
-
-
-
-Counting cicles:
-
-80B1 0082 34
-
-1000 0000
-#+end_example
 
 * Meta     :noexport:
 
