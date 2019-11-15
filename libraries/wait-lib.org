@@ -202,6 +202,66 @@ Adding the other cicles missing leads to near 1600 cicles.
 #+END_SRC
 
 
+* WAITUS
+Wait microseconds subroutine.
+
+Parameters: 
+
+- r16 :: The amount of \mu{}s.
+
+** Declare Subroutine
+#+BEGIN_SRC asm
+WAITUS:
+    push r17
+#+END_SRC
+
+** Initialize variables
+#+BEGIN_SRC asm
+    ldi r17, 0
+#+END_SRC
+
+** Start counting
+#+BEGIN_SRC asm
+1:
+    rcall _wait_oneus
+    inc r17
+    cp r17, r16
+    brne 1b    
+#+END_SRC
+
+** End subroutine
+#+BEGIN_SRC asm
+    pop r17
+    ret
+#+END_SRC
+
+** A subroutine to wait one us
+Arduino's clock works at 16MHz which is the same as 62.5ns (\frac{1000000000ns}{16000000c} = 62.5ns/c). Considering this, for 1000ns = 1\mu{}s is 16 cicles. 
+
+Counting 16 nop is easier and feasible instead of using a loop structure. The comparison and branching instructions use 2 or 3 cicles according to the situation and this could make it difficult to count. 
+
+#+BEGIN_SRC asm
+_wait_oneus:
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    ret
+#+END_SRC
+
+
 * Meta     :noexport:
 
   # ----------------------------------------------------------------------

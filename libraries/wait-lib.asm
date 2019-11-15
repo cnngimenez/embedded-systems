@@ -94,3 +94,36 @@ ldi XH, 0
 pop XH
 pop XL
 ret
+
+WAITUS:
+    push r17
+
+ldi r17, 0
+
+1:
+    rcall _wait_oneus
+    inc r17
+    cp r17, r16
+    brne 1b
+
+pop r17
+ret
+
+_wait_oneus:
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    ret
