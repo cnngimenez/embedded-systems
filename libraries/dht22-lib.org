@@ -1,11 +1,13 @@
 #+property: header-args :comments org :padline yes :tangle dht22-lib.asm
 
 * Introduction
-The DHT22 is an improvement of the DHT12. It is a temperature and humidity sensor. DHT12 supports two protocols I2C and its own One-Wire one. On the other hand, DHT22 only support the One-Wire one.
+The DHT22 (also known as AM2302) is an improvement of the DHT12.  It is a temperature and humidity sensor. DHT12 supports two protocols I2C and its own One-Wire one. On the other hand, DHT22 only support the One-Wire one. 
 
+#+caption: The DHT22 (AM2302) humidity and temperature sensor. label:fig:dht22
 [[file:imgs/DHT22-front.jpg]]
 
 ** Pins
+#+caption: Description of the DHT22 pinout. label:fig:dht22-pinout
 [[file:imgs/DHT22-pins.jpg]]
 
 The hardware interface is provided by three pins. One extra pin is not connected.
@@ -726,6 +728,9 @@ END:
 
 #+END_SRC
 
+
+* Images
+- ref:fig:dht22-pinout and ref:fig:dht22 were obtainded from Nubbeo.com.ar: https://www.nubbeo.com.ar/sensor-humedad-relativa-temperatura-dht22-arduino-nubbeo-508297769xJM
 
 * Meta     :noexport:
 
