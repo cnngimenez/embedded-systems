@@ -18,6 +18,8 @@ Examples made for the Arduino board.
 - [[file:servo/servo.org][Servo Motor Example]] (PWM example)
 - [[file:power-management/index.org][Power Management Example]]
 - [[file:libraries/lcd-spi.org][Graphical LCD with SPI library]] (SPI examples)
+- [[file:libraries/dht22-lib.org][Temperature and Humidity DHT22 sensor]]
+- [[file:libraries/hcsr04.org][Distance Sensor HCSR04]] and its family
 
 These examples are at a Bitbucket repository at this URL: https://bitbucket.org/cnngimenez/embedded_systems
 
