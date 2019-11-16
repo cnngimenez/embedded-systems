@@ -1,0 +1,462 @@
+
+* HCSR04 Sensor
+The HCSR04 and HCSR05 is a distances sensor. It uses sound frequences around 40Khz to detect the distance between the sensor and the obstacle in front. It has got an emiter which generate the waveecho. These two elements con be appreciated in Figure ref:fig:hcsr04 as two rounded objects labelled as T and R respectivelly.
+
+The datasheet can be obtained from SparkFun homepage[fn:1]. It explains the necessary information to make the module works with the MCU.
+
+According to the datasheet, the minimum range is 2cm and the maximum is 4 meters. The measuring angle is 15 degree.
+
+#+attr_latex: :width 10cm
+#+caption: The HC-SR04 module. label:fig:hcsr04
+[[file:imgs/HC-SR04.jpg]]
+
+** Pinout
+The module has four pins: 
+
+- Vcc :: Receives 5V
+- Trigger :: When this pin is high, it activates the trigger signal.
+- Echo :: The echo signal output. It stays high for a proportional time it takes to receives the echo.
+- GND :: Connect to the ground cable.
+
+
+** Usage
+The following steps should be followed in order to receive the distance of the obstacle.
+
+1. The MCU sends a high value through the trigger input pin for 10 \mu{}s. Then wait for answers.
+2. The module send a sonic burst for about 8 cycles.
+3. The module receives the echo after some \mu{}s.
+4. The module set a high value at the echo output pin proportional to the time it takes to receive the echo.
+
+The following formula calculates the distance that a sound travels between one point to another: $d = t \times 340m/s$ where:
+- d :: is the distance in meters.
+- t :: is the time in seconds.
+- 340m/s :: is the speed of sound.
+
+In this case, the echo travels twice the same distance. Thus, the distance should be divided by two.
+
+Considering the speed of sound, which is 340m/s, the program needs to calculate in \mu{}s and cms instead. 340m is 34000cm/s. 1 second is 1000000\mu{}s and thus 34000/1000000\mu{}s = 0.034cm/\mu{}s.
+
+To calculate the distance, then the following formula can be used to change the unit into microseconds and centimeters: $d = t \times 0.034cm/\mu{}s$
+
+The distance traveled by the module's sound starts from the module, reach an obstacle and goes back to the module. This means, that it should be divided by two: $d = \frac{t \times 0.034cm/\mu{}s}{2} = t \times 0.017 = t \times \frac{17}{1000} = \frac{t}{58}$.
+
+* The HCSR04-lib Library
+:PROPERTIES:
+:header-args: :tangle hcsr04-lib.asm :comments org :padline yes
+:END:
+This library exports the subroutine ~HCSR_GET~. This subroutine get the number of microseconds that the echo takes to return. The calculations to obtain the distance is not implemented.
+
+To configure this library, the following symbols has to be declared for the target pin.
+- HCSR_TPORT :: The output port address.
+- HCSR_TDDR :: The DDR port address.
+- HCSR_TNUM :: The pin bit corresponding to the TPORT address.
+
+The following symbols are for the echo pin.
+- HCSR_EPIN :: The input port address.
+- HCSR_EDDR :: The DDR port address.
+- HCSR_ENUM :: The pin bit corresponding to the EPIN address.
+
+The ~.set~ directive is used to create symbols as follows:
+
+#+BEGIN_SRC asm :tangle no
+.set HCSR_TPORT, OPORTB
+.set HCSR_TDDR,  ODDRB
+.set HCSR_TNUM,  0
+
+.set HCSR_EPIN, OPINB
+.set HCSR_EDDR, ODDRB
+.set HCSR_ENUM, 1
+#+END_SRC
+
+In the above example, the PB1 is used to connect the MCU with the module. ~OPORTB~ is the output port accepted by the ~sbi~ and ~cbi~ assembler instructions (it is not the memory address), which its value is 0x05 (0x25 expressed in mapped memory address). If the user changes the pin connected to the MCU, these directives must be changed too.
+
+** License
+#+BEGIN_SRC asm
+;; Copyright 2019 Christian Gimenez
+	   
+;; Author: Christian Gimenez
+
+;; hcsr04-lib.asm
+	   
+;; This program is free software: you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
+	   
+;; This program is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+	   
+;; You should have received a copy of the GNU General Public License
+;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#+END_SRC
+
+
+
+** Initialize
+Initialize the port as input or output. 
+
+No parameters is needed.
+
+*** Declare the subroutine
+Declare the subroutine.
+#+BEGIN_SRC asm
+HCSR_INIT:
+#+END_SRC
+
+*** Set the port modes
+Set the target pin as output and the echo as input.
+
+#+BEGIN_SRC asm
+    sbi HCSR_TDDR, HCSR_TNUM
+    cbi HCSR_EDDR, HCSR_ENUM
+#+END_SRC
+
+*** Return
+#+BEGIN_SRC asm
+    ret
+#+END_SRC
+
+** Sense obstacle
+This function sense the distance of an obstacle and return the distance in centimeters.
+
+Return value:
+
+- X registers :: the amount of microseconds the echo takes to return.
+
+*** Declare subroutine 
+
+#+BEGIN_SRC asm
+HCSR_GET:
+    ldi XL, 0
+    ldi XH, 0
+#+END_SRC
+
+*** Send the trigger signal
+Send 10 \mu{}s a high value to trigger the sound.
+
+#+BEGIN_SRC asm
+    sbi HCSR_TPORT, HCSR_TNUM
+    ldi r16, 8 ;; wait 8 us at least
+    rcall WAITUS
+#+END_SRC
+
+Now, stop the trigger signal.
+
+#+BEGIN_SRC asm
+    cbi HCSR_TPORT, HCSR_TNUM
+#+END_SRC
+
+*** Ignore the low echo value
+While the trigger activates and send the 8 sonic burst, the echo sends low values. 
+
+Read the pin register. If the bit is not high, repeat.
+
+#+BEGIN_SRC asm
+1:
+    sbis HCSR_EPIN, HCSR_ENUM
+    rjmp 1b
+#+END_SRC
+
+*** Count time from the echo 
+Count the time when the echo time is up. The X 16 bit registers is used in order to count more than 255 microseconds. 
+
+First, add 1 to the X registers. Then, wait for one microsecond. Finally, check the echo value if it is low and repeat if it is not.
+
+#+BEGIN_SRC asm
+1:
+    adiw X, 1
+    rcall _oneus
+    sbic HCSR_EPIN, HCSR_ENUM
+    rjmp 1b
+#+END_SRC
+
+** Wait for one microsecond
+An Arduino cicle has 62.5ns (using a clock 16Mhz). Then, to execute 16 cicles (16 no-op instructions) needs 1000ns to complete. 
+
+The following code declare an internal label and use 16 nop instructions to wait for 1000ns (1 microsecond), then simply return. It is easy to count rather than using a loop and considering such a limited amount of instructions.
+
+#+BEGIN_SRC asm
+_oneus:
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        ret
+#+END_SRC
+
+** TODO Calculate distance                                        :noexport:
+The distance is calculated as explained in the [[*Usage][Usage]] section.
+
+The following subroutine execute the calculations needed to return the distance in centimeters according to the return value of the ~HCSR_GET~ subroutine (the elapsed time of the echo).
+
+Parameters:
+
+- X registers :: The echo elapsed time (results from the ~HCSR_GET~).
+
+Return value:
+
+- X registers :: The centimeters between the module and the obstacle.
+
+*** Declare subroutine
+#+BEGIN_SRC asm
+HCSR_CALC:
+    
+#+END_SRC
+
+
+* Test
+:PROPERTIES:
+:header-args: :tangle tests/hcsr04/main.asm :comments org :padline yes :mkdirp yes
+:END:
+
+The following activate the module and request the distance between it and an obstacle.
+
+** Include headers
+The following declares some symbols and include the vector table.
+
+#+BEGIN_SRC asm
+.include "../../registers-inc.asm"
+.include "../../vector-inc.asm"
+#+END_SRC
+
+** Configure the HCSR04 library
+The library needs some symbols before using it. The following defines the PB0 as the trigger pin and the PB1 as the echo one.
+
+#+BEGIN_SRC asm
+.set HCSR_TPORT, OPORTB
+.set HCSR_TDDR,  ODDRB
+.set HCSR_TNUM,  0
+
+.set HCSR_EPIN, OPINB
+.set HCSR_EDDR, ODDRB
+.set HCSR_ENUM, 1
+#+END_SRC
+
+
+** Start main program
+
+Start the main program and initialize libraries.
+
+#+BEGIN_SRC asm
+.text
+RESET:
+    rcall USART_INIT
+    rcall HCSR_INIT
+#+END_SRC
+
+Send something through usart to test it.
+
+#+BEGIN_SRC asm
+    ldi r18, 's'
+    rcall USART_PUT
+#+END_SRC
+
+** Main loop
+Get the distance from the module and print it using the USART library.
+
+Remember that ~HCSR_GET~ return the data in the X registers. Also, the ~USART_HEX~ subroutine uses the X registers as input parameters.
+
+#+BEGIN_SRC asm
+loop:
+    rcall HCSR_GET
+    rcall USART_HEX
+#+END_SRC
+
+Print a new line and wait some time before requesting another distance data.
+
+#+BEGIN_SRC asm
+    ldi r18, '\r'
+    rcall USART_PUT
+    ldi r18, '\n'
+    rcall USART_PUT
+    ldi r16, 20
+    rcall WAIT
+
+    rjmp loop
+#+END_SRC
+
+** Include libraries
+Include the following libraries:
+
+- USART
+- HCSR04
+  - WAIT (HCSR04 depends on wait and the main program uses it).
+
+#+BEGIN_SRC asm
+.include "../../usart-lib.asm"
+.include "../../hcsr04-lib.asm"
+.include "../../wait-lib.asm"
+#+END_SRC  
+
+** Vector handlers for the AT368
+No need to set other vector handlers. Simply declare them to avoid errors on the assembler compiler.
+#+BEGIN_SRC asm
+;; __________________________________________________
+	;; Vector Handlers
+	
+EXT_INT0:	; IRQ0 Handler 
+EXT_INT1:	; IRQ1 Handler 
+PCINT0:		; PCINT0 Handler 
+PCINT1:		; PCINT1 Handler 
+PCINT2:		; PCINT2 Handler 
+WDT:		; Watchdog Timer Handler 
+TIM2_COMPA:	; Timer2 Compare A Handler 
+TIM2_COMPB:	; Timer2 Compare B Handler 
+TIM2_OVF:	; Timer2 Overflow Handler 
+TIM1_CAPT:	; Timer1 Capture Handler 
+TIM1_COMPA:	; Timer1 Compare A Handler 
+TIM1_COMPB:	; Timer1 Compare B Handler 
+TIM1_OVF:	; Timer1 Overflow Handler 
+TIM0_COMPA:	; Timer0 Compare A Handler 
+TIM0_COMPB:	; Timer0 Compare B Handler 
+TIM0_OVF:	; Timer0 Overflow Handler 
+SPI_STC:	; SPI Transfer Complete Handler 
+USART_RXC:	; USART, RX Complete Handler 
+USART_UDRE:	; USART, UDR Empty Handler 
+USART_TXC:	; USART, TX Complete Handler 
+ADC:		; ADC Conversion Complete Handler 
+EE_RDY:		; EEPROM Ready Handler 
+ANA_COMP:	; Analog Comparator Handler 
+TWI:		; 2-wire Serial Interface Handler 
+SMP_RDY:	; SPM_RDYStore Program Memory Ready
+
+;; __________________________________________________
+    reti
+END:
+    nop
+    break
+    rjmp END
+
+#+END_SRC
+
+** Vector handlers  for the AT2560
+#+BEGIN_SRC asm :tangle no
+;; Vector Handlers
+
+
+INT0:        ; IRQ0 Handler 
+INT1:        ; IRQ1 Handler 
+INT2:        ; IRQ2 Handler 
+INT3:        ; IRQ3 Handler 
+INT4:        ; IRQ4 Handler 
+INT5:        ; IRQ5 Handler 
+INT6:        ; IRQ6 Handler 
+INT7:        ; IRQ7 Handler 
+PCINT0:      ; PCINT0 Handler 
+PCINT1:      ; PCINT1 Handler 
+PCINT2:      ; PCINT2 Handler 
+WD:          ; Watchdog Timeout Handler 
+TIM2_COMPA:  ; Timer2 CompareA Handler 
+TIM2_COMPB:  ; Timer2 CompareB Handler 
+TIM2_OVF:    ; Timer2 Overflow Handler 
+TIM1_CAPT:   ; Timer1 Capture Handler 
+TIM1_COMPA:  ; Timer1 CompareA Handler 
+TIM1_COMPB:  ; Timer1 CompareB Handler 
+TIM1_COMPC:  ; Timer1 CompareC Handler 
+TIM1_OVF:    ; Timer1 Overflow Handler 
+TIM0_COMPA:  ; Timer0 CompareA Handler 
+TIM0_COMPB:  ; Timer0 CompareB Handler 
+TIM0_OVF:    ; Timer0 Overflow Handler 
+SPI_STC:     ; SPI Transfer Complete Handler 
+USART0_RXC:  ; USART0 RX Complete Handler 
+USART0_UDRE: ; USART0,UDR Empty Handler 
+USART0_TXC:  ; USART0 TX Complete Handler 
+ANA_COMP:    ; Analog Comparator Handler 
+ADC:         ; ADC Conversion Complete Handler 
+EE_RDY:      ; EEPROM Ready Handler 
+TIM3_CAPT:   ; Timer3 Capture Handler 
+TIM3_COMPA:  ; Timer3 CompareA Handler 
+TIM3_COMPB:  ; Timer3 CompareB Handler 
+TIM3_COMPC:  ; Timer3 CompareC Handler 
+TIM3_OVF:    ; Timer3 Overflow Handler 
+USART1_RXC:  ; USART1 RX Complete Handler 
+USART1_UDRE: ; USART1,UDR Empty Handler 
+USART1_TXC:  ; USART1 TX Complete Handler 
+TWI:         ; 2-wire Serial Handler 
+SPM_RDY:     ; SPM Ready Handler 
+TIM4_CAPT:   ; Timer4 Capture Handler 
+TIM4_COMPA:  ; Timer4 CompareA Handler 
+TIM4_COMPB:  ; Timer4 CompareB Handler 
+TIM4_COMPC:  ; Timer4 CompareC Handler 
+TIM4_OVF:    ; Timer4 Overflow Handler 
+TIM5_CAPT:   ; Timer5 Capture Handler 
+TIM5_COMPA:  ; Timer5 CompareA Handler 
+TIM5_COMPB:  ; Timer5 CompareB Handler 
+TIM5_COMPC:  ; Timer5 CompareC Handler 
+TIM5_OVF:    ; Timer5 Overflow Handler 
+USART2_RXC:  ; USART2 RX Complete Handler 
+USART2_UDRE: ; USART2,UDR Empty Handler 
+USART2_TXC:  ; USART2 TX Complete Handler 
+USART3_RXC:  ; USART3 RX Complete Handler 
+USART3_UDRE: ; USART3,UDR Empty Handler 
+USART3_TXC:  ; USART3 TX Complete Handler
+
+;; __________________________________________________
+    reti
+END:
+    nop
+    break
+    rjmp END
+
+#+END_SRC
+
+* Images
+- The Figure ref:fig:hcsr04 has been obtained from the SparkFun Web page at https://www.sparkfun.com/products/15569. It is licensed under the CC-By 2.0.
+
+* Footnotes
+
+[fn:1] https://www.sparkfun.com/products/15569#documents-tab. 
+
+
+* Meta     :noexport:
+
+  # ----------------------------------------------------------------------
+  #+TITLE:  HCSR04 Distance Sensor
+  #+AUTHOR: Christian Gimenez
+  #+DATE:   15 Nov 2019
+  #+EMAIL:
+  #+DESCRIPTION: 
+  #+KEYWORDS: 
+
+  #+STARTUP: inlineimages hidestars content hideblocks entitiespretty indent fninline latexpreview
+  #+TODO: TODO(t!) CURRENT(c!) PAUSED(p!) | DONE(d!) CANCELED(C!@)
+  #+OPTIONS:   H:3 num:t toc:t \n:nil @:t ::t |:t ^:{} -:t f:t *:t <:t
+  #+OPTIONS:   TeX:t LaTeX:t skip:nil d:nil todo:t pri:nil tags:not-in-toc tex:imagemagick
+  #+LINK_UP:   
+  #+LINK_HOME: 
+  #+XSLT:
+
+  # -- HTML Export
+  #+INFOJS_OPT: view:info toc:t ftoc:t ltoc:t mouse:underline buttons:t path:libs/org-info.js
+  #+EXPORT_SELECT_TAGS: export
+  #+EXPORT_EXCLUDE_TAGS: noexport
+  #+HTML_LINK_UP: index.html
+  #+HTML_LINK_HOME: index.html
+
+  # -- For ox-twbs or HTML Export
+  #+HTML_HEAD: <link href="libs/bootstrap.min.css" rel="stylesheet">
+  #+HTML_HEAD: <script src="libs/jquery.min.js"></script> 
+  #+HTML_HEAD: <script src="libs/bootstrap.min.js"></script>
+  #+LANGUAGE: en
+
+  # Local Variables:
+  # org-hide-emphasis-markers: t
+  # org-use-sub-superscripts: "{}"
+  # fill-column: 80
+  # visual-line-fringe-indicators: t
+  # ispell-local-dictionary: "british"
+  # org-src-preserve-indentation: t
+  # End:
