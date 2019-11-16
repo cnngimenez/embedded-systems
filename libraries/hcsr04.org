@@ -447,9 +447,9 @@ END:
   #+HTML_LINK_HOME: index.html
 
   # -- For ox-twbs or HTML Export
-  #+HTML_HEAD: <link href="libs/bootstrap.min.css" rel="stylesheet">
-  #+HTML_HEAD: <script src="libs/jquery.min.js"></script> 
-  #+HTML_HEAD: <script src="libs/bootstrap.min.js"></script>
+  #+HTML_HEAD: <link href="../libs/bootstrap.min.css" rel="stylesheet">
+  #+HTML_HEAD: <script src="../libs/jquery.min.js"></script> 
+  #+HTML_HEAD: <script src="../libs/bootstrap.min.js"></script>
   #+LANGUAGE: en
 
   # Local Variables:
