@@ -27,6 +27,7 @@ The library have the following template:
 <<license>>
 <<headers>>
 <<lcd_instready>>
+<<lcd_send4bits>>
 <<lcd_init>>
 <<lcd_senddata>>
 <<lcd_inst>>
@@ -92,6 +93,37 @@ Basically, turn on the third B port, wait 37\mu{}s then turn it off and wait aga
 
         pop r17
         pop r16
+        ret
+#+END_SRC
+
+** TODO Send 4-bit data                                            :private:
+Send only 4 bit data. This is intended only for initialization or special purposes.
+
+Parameters:
+- r16 :: The first four bits of this register is used to send it.
+
+Keep only the first four bits needed, then shift left the r16 register to center the data on the connected port bits.
+Read the PORTD pins in order to retain the other bits intact. Then send the center pins new data.
+
+#+name: lcd_send4bits
+#+BEGIN_SRC asm
+.LCD_SEND4BITS:
+        push r17
+        push r16
+
+        andi r16, 0b00001111    ; keep the useful data and center it
+        lsl r16
+        lsl r16
+        
+        lds r17, PORTD		; Retain the other bits value, just modify the center one.
+        andi r17, 0b11000011
+        or r17, r16
+        out OPORTD, r16
+	
+        rcall .LCD_INSTREADY
+
+        pop r16
+        pop r17
         ret
 #+END_SRC
 
@@ -165,12 +197,8 @@ Then, send the first function set instruction 0b0011 (RS, RW = 0, 0) and wait.
 
 #+name: lcd_init-step_2
 #+BEGIN_SRC asm
-        in r16, OPORTD
-        andi r16, 0b11000011	; 0b011
-        ori r16, 0b00001100
-        out OPORTD, r16
-
-        rcall .LCD_INSTREADY
+        ldi r16, 0b00000011 	; 0b0011
+        rcall .LCD_SEND4BITS
 
         ldi r16, 5
         rcall WAITMS
@@ -180,27 +208,22 @@ Send the same instruction twice:
 
 #+name: lcd_init-step_3
 #+BEGIN_SRC asm
-        andi r16, 0b11000011
-        ori r16,0b00001100 	; 0b0011
-        out OPORTD, r16
-        rcall .LCD_INSTREADY
+        ldi r16,0b00000011 	; 0b0011
+        rcall .LCD_SEND4BITS
+
         ldi r16, 1
         rcall WAITMS
 
-        andi r16, 0b11000011	
-        ori r16,0b00001100	; 0b0011
-        out OPORTD, r16
-        rcall .LCD_INSTREADY
+	      ldi r16,0b00001100	; 0b0011
+        rcall .LCD_SEND4BITS
 #+END_SRC
 
 Send instruction 0b0010. After this, normal 8-bit instruction can be sent.
 
 #+name: lcd_init-step_4
 #+BEGIN_SRC asm
-        andi r16, 0b11000011
-        ori r16,0b00001000	; 0b0010
-        out OPORTD, r16
-        rcall .LCD_INSTREADY
+        ldi r16,0b00000010	; 0b0010
+        rcall .LCD_SEND4BITS
 #+END_SRC
 
 After that, send the instruction 0x0010_0011 (RS, RW = 0, 0) and wait.
@@ -243,7 +266,6 @@ A plus, set the DDRAM at position 0. This will enable the user to write a charac
         rcall LCD_DDRAM_ADDR
 #+END_SRC
 
-** TODO Send 4-bit data                                            :private:
 ** Send 8-bit data
 Send data to the LCD. RS and RW outputs are not touched.
 
