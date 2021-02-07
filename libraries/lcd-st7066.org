@@ -34,6 +34,10 @@ The library have the following template:
 <<lcd_home>>
 <<lcd_ddram_addr>>
 <<lcd_char>>
+<<lcd_first_row>>
+<<lcd_second_row>>
+<<lcd_third_row>>
+<<lcd_fourth_row>>
 #+END_SRC
 
   
@@ -370,14 +374,61 @@ LCD_CHAR:
 
 
 
-** TODO Goto first row
-01
-45
-23
-67
-** TODO Goto second row
-** TODO Goto third row
-** TODO Goto fourth row
+** Goto first row
+Move the cursor to the first row. This is the same as return home.
+
+#+name: lcd_first_row
+#+BEGIN_SRC asm
+LCD_FIRST_ROW:
+        rcall LCD_HOME
+        ret
+#+END_SRC
+
+** Goto second row
+Move the cursor to the second row.
+
+#+name: lcd_second_row
+#+BEGIN_SRC asm
+LCD_SECOND_ROW:
+        push r16
+
+        ldi r16, 40
+        rcall LCD_DDRAM_ADDR
+
+        pop r16
+        ret
+#+END_SRC
+
+** Goto third row
+Move the cursor to the third row.
+
+#+name: lcd_third_row
+#+BEGIN_SRC asm
+LCD_THIRD_ROW:
+        push r16
+
+        ldi r16, 20
+        rcall LCD_DDRAM_ADDR
+
+        pop r16
+        ret
+#+END_SRC
+
+** Goto fourth row
+Move the cursor to the fourth row.
+
+#+name: lcd_fourth_row
+#+BEGIN_SRC asm
+LCD_FOURTH_ROW:
+        push r16
+
+        ldi r16, 60
+        rcall LCD_DDRAM_ADDR
+
+        pop r16
+        ret
+#+END_SRC
+
 
 * Hello world Test
 
