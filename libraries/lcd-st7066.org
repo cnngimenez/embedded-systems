@@ -51,6 +51,7 @@ The library have the following template:
 <<lcd_second_row>>
 <<lcd_third_row>>
 <<lcd_fourth_row>>
+<<lcd_string>>
 #+END_SRC
 
   
@@ -506,6 +507,7 @@ Parameter:
 | r16 | X | X | a | a | a | a | a | a |
 |-----+---+---+---+---+---+---+---+---|
 
+#+name: lcd_cgram_addr
 #+BEGIN_SRC asm
 LCD_CGRAM_ADDR:
         push r16
@@ -610,7 +612,49 @@ LCD_FOURTH_ROW:
 #+END_SRC
 
 
-* Hello world Test
+** Send string
+Send characters to the LCD controller up to the zeroed character. The string must be stored on RAM.
+
+Parameter:
+- XL, XH :: The starting RAM address to read.
+- r16 :: The milliseconds to wait between characters.
+
+X register is used to store the memory address. Then, r16 is used to store the character red. The repetition stop when r16 is 0 (the null character is red).
+
+#+name: lcd_string
+#+BEGIN_SRC asm
+LCD_STRING:
+        push XL
+        push XH
+        push r16
+        push r17
+
+        mov r17, r16
+1:
+        ld r16, X+
+        cpi r16, 0
+        breq 2f			; if r16 = 0 then end subroutine
+
+        rcall LCD_CHAR		; if r16 /= 0 then send char
+
+        cpi r17,0
+        breq 1b			; r17 is zero, no need to wait
+        mov r16, r17
+        rcall WAITMS
+	
+        rjmp 1b
+
+2:
+        pop r17
+        pop r16
+        pop XH
+        pop XL
+        ret
+#+END_SRC
+
+
+* Hello world example
+This is a basic Hello world example. It can be used to test if the connection and the display works properly.
 
 #+BEGIN_SRC asm :noweb yes :tangle tests/lcd-st7066/hello.asm
 <<license>>
@@ -640,6 +684,119 @@ RESET:
 	rjmp 1b
 .include "../../lcd-st7066.asm"
 #+END_SRC
+
+
+* Hello world with string example
+This example shows how to load a string into the ATMega memory and display it on the LCD.
+
+#+BEGIN_SRC asm :noweb yes :tangle tests/lcd-st7066/hello_str.asm
+<<license>>
+
+;; .include "../../vector-inc.asm"
+.include "../../registers-inc.asm"
+
+<<data>>
+	
+.text
+RESET:
+	rcall .COPY_TO_RAM
+	
+      rcall LCD_INIT
+
+	ldi r16, 0b00000110
+	rcall LCD_DISPLAYCONTROL
+	
+	ldi r16, 255
+	ldi XL, lo8(.str_hello)
+	ldi XH, hi8(.str_hello)
+	rcall LCD_STRING
+
+	rcall LCD_SECOND_ROW
+
+	ldi r16, 255
+	ldi XL, lo8(.str_kanas)
+	ldi XH, hi8(.str_kanas)
+	rcall LCD_STRING
+
+1:
+	sleep
+	break
+	rjmp 1b
+
+<<copy_to_ram>>
+
+.include "../../lcd-st7066.asm"
+
+STATIC_DATA:
+#+END_SRC
+
+** Store string in the program
+The following code will tell the assembler to store a string into the program memory. It also gives a name to the RAM address. Remember that this will be stored on the program memory, not the RAM, but the address returned on the labels are from the RAM.
+
+The assembler program needs to know where the ".rodata" section should be. This information can be provided as a parameter when calling the assembler (~as~) program. 328p processors should use 0x0100 at starting address for .rodata, thus the parameter ~-Tdata=0x800100~ should be added to the linker.
+
+This means that ~.str_hello~ label will be mapped to the RAM address, but the string itself will be at the last portion of the program.
+
+The ~.string~ pseudo-op adds the zero character at the end of the string. The ~data_length~ assembler variable is setted to the length of the whole characters stored (the size of the memory occupied).
+
+#+name: data
+#+BEGIN_SRC asm
+.section .rodata
+
+.data_start:
+.str_hello:
+	.string "Hello World"
+
+.str_kanas:
+	.byte 0b10111010, 0b11011101, 0b11000110, 0b11000001, 0b11011100, 0b10111110, 0b10110110, 0b10110010, 0
+
+.set data_length, 25
+#+END_SRC
+
+** Copy the string to RAM
+Z stores the program address where the data is, X stores the RAM address.
+
+Parameters:
+- XL, XH :: The RAM memory.
+- ZL, ZH :: The program memory
+
+#+name: copy_to_ram
+#+BEGIN_SRC asm
+.COPY_TO_RAM:
+	push ZL
+	push ZH
+	push XL
+	push XH
+	push r17
+	push r16
+
+	ldi r17, data_length
+	ldi ZL, lo8(STATIC_DATA)
+	ldi ZH, hi8(STATIC_DATA)
+	ldi XL, lo8(.data_start)
+	ldi XH, hi8(.data_start)
+	
+1:
+	lpm r16, Z+
+	cpi r17, 0
+	breq 2f
+	
+	dec r17
+	st X+, r16
+	rjmp 1b
+
+2:
+	st X+, r16
+
+	pop r16
+	pop r17
+	pop XH
+	pop XL
+	pop ZH
+	pop ZL
+	ret
+#+END_SRC
+
 
 * Number test
 This example show the position of each cell by printing one digit after another.
