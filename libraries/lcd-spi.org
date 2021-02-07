@@ -1,4 +1,4 @@
-#+PROPERTY: header-args :tangle lcd-spi-lib.asm :padline yes :comments org
+#+PROPERTY: header-args :tangle lcd-spi-lib-rest.asm :padline yes :comments org
 
 * Introduction
   The following library use an SPI connection to control a 128x64 LCD. In this case, the display has got an ST7920 controller chip. 
@@ -84,7 +84,46 @@ The following registers are needed for controlling the SPI module.
 
 * Library
 
+The library use registers that depends on the processor used. Their layout are:
+
+#+BEGIN_SRC asm :tangle lcd-spi-328p-lib.asm :noweb tangle :padline yes :comments org
+<<license>>
+<<headers>>
+<<spi_init_328p>>
+<<lcd_inst>>
+<<lcd_init>>
+<<lcd_ddram_addr>>
+<<lcd_ddram_val>>
+<<lcd_tmode>>
+<<lcd_gmode>>
+<<lcd_gdram_addr>>
+<<lcd_gdram_val>>
+<<lcd_copy_gdram>>
+<<lcd_gclear>>
+<<lcd_home>>
+<<lcd_clear>>
+#+END_SRC
+
+#+BEGIN_SRC asm :tangle lcd-spi-2560-lib.asm :noweb tangle :padline yes :comments org
+<<license>>
+<<headers>>
+<<spi_init_2560>>
+<<lcd_inst>>
+<<lcd_init>>
+<<lcd_ddram_addr>>
+<<lcd_ddram_val>>
+<<lcd_tmode>>
+<<lcd_gmode>>
+<<lcd_gdram_addr>>
+<<lcd_gdram_val>>
+<<lcd_copy_gdram>>
+<<lcd_gclear>>
+<<lcd_home>>
+<<lcd_clear>>
+#+END_SRC
+
 ** License
+#+name: license
 #+BEGIN_SRC asm
 ;; Copyright 2019 Christian Gimenez
 	   
@@ -108,6 +147,7 @@ The following registers are needed for controlling the SPI module.
 ** Include headers
 The [[file:wait-lib.org]] library is used. 
 
+#+name: headers
 #+BEGIN_SRC asm
 .include "wait-lib.asm"
 #+END_SRC
@@ -130,10 +170,48 @@ The subprogram label is ~.SPI_INIT~. It has no parameters and it is declared as 
 *** Start the subroutine
 Define the name of the subroutine and save needed registers on the stack.
 
-#+BEGIN_SRC asm
+#+name: spi_init_2560
+#+BEGIN_SRC asm :noweb yes
 .SPI_INIT:
     push r16
     ;; push r17
+<<spi_init-pin_modes_2560>>
+<<spi_init-1>>
+<<spi_init-2>>
+<<spi_init-3>>
+<<spi_init-4>>
+<<spi_init-5>>
+<<spi_init-6>>
+<<spi_init-7>>
+<<spi_init-8>>
+<<spi_init-9>>
+<<spi_init-10>>
+<<spi_init-11>>
+    ;; pop r17
+    pop r16
+    ret
+#+END_SRC
+
+#+name: spi_init_328p
+#+BEGIN_SRC asm :noweb yes
+.SPI_INIT:
+    push r16
+    ;; push r17
+<<spi_init-pin_modes_328p>>
+<<spi_init-1>>
+<<spi_init-2>>
+<<spi_init-3>>
+<<spi_init-4>>
+<<spi_init-5>>
+<<spi_init-6>>
+<<spi_init-7>>
+<<spi_init-8>>
+<<spi_init-9>>
+<<spi_init-10>>
+<<spi_init-11>>
+    ;; pop r17
+    pop r16
+    ret
 #+END_SRC
 
 *** Pin Modes
@@ -152,6 +230,7 @@ Also set CS bit in 1.
 | PB5 | SCK      | O        |
 |-----+----------+----------|
 
+#+name: spi_init-pin_modes_328p
 #+BEGIN_SRC asm :tangle no
     lds r16, DDRB
 
@@ -177,6 +256,7 @@ Also set CS bit in 1.
 | PB0         | O   | SS / CS / RS    |
 |-------------+-----+-----------------|
 
+#+name: spi_init-pin_modes_2560
 #+BEGIN_SRC asm
     lds r16, DDRB
 
@@ -204,6 +284,7 @@ The following table depicts the register's bits and their description.
 
 Use the R16 register to change the SPCR value.
 
+#+name: spi_init-2
 #+BEGIN_SRC asm
     lds r16, SPCR
 #+END_SRC
@@ -211,6 +292,7 @@ Use the R16 register to change the SPCR value.
 **** SPIE - Disable Interruptions
 Disable the SPI interruptions.
 
+#+name: spi_init-3
 #+BEGIN_SRC asm
     clt
     bld r16, 7 ;; SPIE
@@ -219,6 +301,7 @@ Disable the SPI interruptions.
 **** SPE - SPI Enable
 Turn on the SPI.
 
+#+name: spi_init-4
 #+BEGIN_SRC asm
     set
     bld r16, 6 ;; SPE
@@ -234,6 +317,7 @@ Send the MSB first.
 |    1 | LSB Word   |
 |------+------------|
 
+#+name: spi_init-5
 #+BEGIN_SRC asm
     clt
     bld r16, 5 ;; DORD
@@ -242,6 +326,7 @@ Send the MSB first.
 **** MSTR - Master mode
 Set the master mode. Slave mode is the LCD.
 
+#+name: spi_init-6
 #+BEGIN_SRC asm
     set
     bld r16, 4 ;; MSTR
@@ -259,6 +344,7 @@ The Clock Polarity bit (CPOL) defines when is considered an idle state.
 
 The IDLE should be at idle when low: CPOL = 0.
 
+#+name: spi_init-7
 #+BEGIN_SRC asm
     clt
     bld r16, 3 ;; CPOL
@@ -276,6 +362,7 @@ The data is sampled on leading (first) or trailing (last) edge.
 
 The data sample should be at leading edge: CPHA = 0.
 
+#+name: spi_init-8
 #+BEGIN_SRC asm
     clt
     bld r16, 2 ;; CPHA
@@ -310,6 +397,7 @@ Using SPR = ~0b10~ will result in $\frac{16000Khz}{64} = 250$.
 |     0 |    1 | 0    |
 |-------+------+------|
 
+#+name: spi_init-9
 #+BEGIN_SRC asm
     set
     bld r16, 1 ;; SPR1
@@ -318,6 +406,7 @@ Using SPR = ~0b10~ will result in $\frac{16000Khz}{64} = 250$.
 #+END_SRC
 
 **** Store the constructed value
+#+name: spi_init-10
 #+BEGIN_SRC asm
     sts SPCR, r16
 #+END_SRC
@@ -328,6 +417,7 @@ Only the SPI2X bit is writable. Thus, this bit is the only one to be configured.
 
 Disable 2x prescaler.
 
+#+name: spi_init-11
 #+BEGIN_SRC asm
     lds r16, SPSR
     clt 
@@ -335,14 +425,6 @@ Disable 2x prescaler.
     sts SPSR, r16
 #+END_SRC
 
-*** Return from the Subroutine
-Restore registers and return.
-
-#+BEGIN_SRC asm
-    ;; pop r17
-    pop r16
-    ret
-#+END_SRC
 
 ** Send Instruction Subroutine
 The following section describe the ~LCD_INST~ subroutine. The objective is to send the a byte of data along with the RS and RW bits. This must be sent using the SPI protocol.
@@ -372,15 +454,27 @@ Each instruction must follow the following sequence:
 *** Begin Subroutine
 Start the subroutine and save registers.
 
-#+BEGIN_SRC asm
+#+name: lcd_inst
+#+BEGIN_SRC asm :noweb yes
 LCD_INST:
     push r16
     push r17
+<<inst-1>>
+<<inst-2>>
+<<inst-3>>
+<<inst-4>>
+<<inst-5>>
+<<inst-6>>
+<<inst-7>>
+    pop r17
+    pop r16
+    ret
 #+END_SRC
 
 *** Prepare the first byte
 Prepare the following byte: ~11111 RW RS 0~
 
+#+name: inst-1
 #+BEGIN_SRC asm
     lsl r17
     ori r17, 0b11111000
@@ -388,6 +482,7 @@ Prepare the following byte: ~11111 RW RS 0~
 
 Send the first byte. Wait until the SPIF bit (in SPSR register) is one.
 
+#+name: inst-2
 #+BEGIN_SRC asm
     sts SPDR, r17
 1:
@@ -399,6 +494,7 @@ Send the first byte. Wait until the SPIF bit (in SPSR register) is one.
 *** Send the Higher Data bits
 Prepare the following byte: ~D7-D4 0000~
 
+#+name: inst-3
 #+BEGIN_SRC asm
     mov r17, r16
     andi r17, 0b11110000
@@ -406,6 +502,7 @@ Prepare the following byte: ~D7-D4 0000~
 
 Send the bits and wait for the high SPIF bit 
 
+#+name: inst-4
 #+BEGIN_SRC asm
     sts SPDR, r17
 1:
@@ -417,6 +514,7 @@ Send the bits and wait for the high SPIF bit
 *** Send the Lower Data Bits
 Prepare the following byte: ~D3-D0 0000~
 
+#+name: inst-5
 #+BEGIN_SRC asm
     mov r17, r16
     lsl r17
@@ -428,21 +526,13 @@ Prepare the following byte: ~D3-D0 0000~
 
 Send the bits and wait for the SPIF bit.
 
+#+name: inst-6
 #+BEGIN_SRC asm
     sts SPDR, r17
 1:
     lds r17, SPSR
     sbrs r17, 7 ;; SPIF bit at SPSR.
     rjmp 1b
-#+END_SRC
-
-*** Return
-Return from the subroutine. Ensure the used register are restored.
-
-#+BEGIN_SRC asm
-    pop r17
-    pop r16
-    ret
 #+END_SRC
 
 ** Initialize the LCD
@@ -460,14 +550,31 @@ The ~LCD_INIT~ command is defined in this section. Its purpose is to follow the 
 
 *** Begin Subroutine
 Save registers that will be used by the subroutine.
-#+BEGIN_SRC asm
+
+#+name: lcd_init
+#+BEGIN_SRC asm :noweb yes
 LCD_INIT:
     push r16
     push r17
+<<lcd_init-spi>>
+<<lcd_init-wait>>
+<<lcd_init-set_cmd1>>
+<<lcd_init-set_cmd2>>
+<<lcd_init-set_cmd3>>
+<<lcd_init-set_cmd4>>
+<<lcd_init-status_cmd1>>
+<<lcd_init-status_cmd2>>
+<<lcd_init-clear_cmd1>>
+<<lcd_init-clear_cmd2>>
+<<lcd_init-entry_cmd1>>
+<<lcd_init-entry_cmd2>>
+<<lcd_init-end>>
 #+END_SRC
 
 *** Call the SPI Initialization
 Ensure that the SPI has been initialized.
+
+#+name: lcd_init-spi
 #+BEGIN_SRC asm
     rcall .SPI_INIT
 #+END_SRC
@@ -479,6 +586,7 @@ $$62.5ns \cdot 16777215 cicles = 1048575937.5ns = 1048 ms$$
 
 As long as R16 is 0x01, the waiting will be at least 1048ms.
 
+#+name: lcd_init-wait
 #+BEGIN_SRC asm
     ldi r16, 0x01
     rcall WAIT
@@ -487,6 +595,7 @@ As long as R16 is 0x01, the waiting will be at least 1048ms.
 *** Send Two Function Set Commands
 Send the first instruction. RS and RW must be 0. High data must be 0011.
 
+#+name: lcd_init-set_cmd1
 #+BEGIN_SRC asm
     ldi r16, 0b00110000
     ldi r17, 0x00
@@ -495,6 +604,7 @@ Send the first instruction. RS and RW must be 0. High data must be 0011.
 
 Wait more than 100 \mu{}s.
 
+#+name: lcd_init-set_cmd2
 #+BEGIN_SRC asm
     ldi r16, 0x01
     rcall WAIT
@@ -502,6 +612,7 @@ Wait more than 100 \mu{}s.
 
 Send the second instruction.
 
+#+name: lcd_init-set_cmd3
 #+BEGIN_SRC asm
     ldi r16, 0b00110000
     ldi r17, 0x00
@@ -510,6 +621,7 @@ Send the second instruction.
 
 Wait more than 35 \mu{}s.
 
+#+name: lcd_init-set_cmd4
 #+BEGIN_SRC asm
     ldi r16, 0x01
     rcall WAIT
@@ -517,6 +629,7 @@ Wait more than 35 \mu{}s.
 
 *** Send Display Status Command
 
+#+name: lcd_init-status_cmd1
 #+BEGIN_SRC asm
     ldi r17, 0x00
     ldi r16, 0b00001100
@@ -530,12 +643,15 @@ Wait more than 35 \mu{}s.
 
 Wait more than 100 \mu{}s.
 
+#+name: lcd_init-status_cmd2
 #+BEGIN_SRC asm
     ldi r16, 0x01
     rcall WAIT
 #+END_SRC
 
 *** Send the Display Clear Command
+
+#+name: lcd_init-clear_cmd1
 #+BEGIN_SRC asm
     ldi r17, 0x00
     ldi r16, 0b00000001
@@ -544,6 +660,7 @@ Wait more than 100 \mu{}s.
 
 Wait 10 ms.
 
+#+name: lcd_init-clear_cmd2
 #+BEGIN_SRC asm
     ldi r16, 0x01
     rcall WAIT
@@ -552,6 +669,7 @@ Wait 10 ms.
 *** Send the Entry Mode Command
 This command controls the Increment and the Display Shift.
 
+#+name: lcd_init-entry_cmd1
 #+BEGIN_SRC asm
     ldi r17, 0x00
     ldi r16, 0b00000100
@@ -564,6 +682,7 @@ This command controls the Increment and the Display Shift.
 
 Wait 72\mu{}s.
 
+#+name: lcd_init-entry_cmd2
 #+BEGIN_SRC asm
     ldi r16, 0x01
     rcall WAIT
@@ -572,6 +691,7 @@ Wait 72\mu{}s.
 *** End Subroutine
 Restore registers and return.
 
+#+name: lcd_init-end
 #+BEGIN_SRC asm
     pop r17
     pop r16
@@ -585,11 +705,16 @@ Use the ~LCD_DDRAM_ADDR~ subroutine to set the DDRAM address at the LCD.
 Parameters:
 - r16 :: The address to point on the DDRAM.
 
-*** Begin subroutine
-#+BEGIN_SRC asm
+#+name: lcd_ddram_addr
+#+BEGIN_SRC asm :noweb yes
 LCD_DDRAM_ADDR:
     push r16
     push r17
+<<lcd_ddram_addr-1>>
+<<lcd_ddram_addr-2>>
+    pop r17
+    pop r16
+    ret
 #+END_SRC
 
 *** Send the address
@@ -600,26 +725,20 @@ The set address command is:
 |  0 |  0 |  1 | Address |
 |----+----+----+---------|
 
+#+name: lcd_ddram_addr-1
 #+BEGIN_SRC asm
     ori r16, 0b10000000
     ldi r17, 0x00
     rcall LCD_INST
 #+END_SRC
 
-*** Wait 
+Wait.
+
+#+name: lcd_ddram_addr-2
 #+BEGIN_SRC asm
     ldi r16, 0x01
     rcall WAIT
 #+END_SRC
-
-*** End subroutine
-#+BEGIN_SRC asm
-    pop r17
-    pop r16
-    ret
-#+END_SRC
-
-
 
 ** Set DDRAM Value
 Use the ~LCD_DDRAM_VAL~ instruction to send a value to the CGRAM 
@@ -628,12 +747,16 @@ Parameters:
 
 - r16 :: Character value.
 
-*** Begin subroutine
-
-#+BEGIN_SRC asm
+#+name: lcd_ddram_val
+#+BEGIN_SRC asm :noweb yes
 LCD_DDRAM_VAL:
     push r16
     push r17
+<<lcd_ddram_val-1>>
+<<lcd_ddram_val-2>>
+	pop r17
+    pop r16
+    ret
 #+END_SRC
 
 *** Send the Data
@@ -645,33 +768,27 @@ Send the command following command:
 |  0 |  1 | D7-D0 |
 |----+----+-------|
 
+#+name: lcd_ddram_val-1
 #+BEGIN_SRC asm
     ldi r17, 0b00000001
     rcall LCD_INST
 #+END_SRC
 
-*** Wait 
+Wait.
+
+#+name: lcd_ddram_val-2
 #+BEGIN_SRC asm
     ldi r16, 0x01
     rcall WAIT
 #+END_SRC
 
-*** End subroutine
-#+BEGIN_SRC asm
-    pop r17
-    pop r16
-    ret
-#+END_SRC
-
-
 ** Set Text Mode
+#+name: lcd_tmode
 #+BEGIN_SRC asm
 LCD_TMODE:
     push r16
     push r17
-#+END_SRC
 
-#+BEGIN_SRC asm
     ldi r16, 0b00110100 ;; Enable extended Inst. Set.
     ldi r17, 0x00
     rcall LCD_INST
@@ -681,9 +798,7 @@ LCD_TMODE:
     ldi r16, 0b00110000 ;; Enable extended Inst. Set.
     ldi r17, 0x00
     rcall LCD_INST
-#+END_SRC
 
-#+BEGIN_SRC asm
     pop r17
     pop r16
     ret
@@ -692,14 +807,21 @@ LCD_TMODE:
 ** Graphics 
 
 *** Set Graphic Mode
-#+BEGIN_SRC asm
+#+name: lcd_gmode
+#+BEGIN_SRC asm :noweb yes
 LCD_GMODE:
     push r16
     push r17
+<<lcd_gmode-1>>
+<<lcd_gmode-2>>
+	  pop r17
+    pop r16
+    ret
 #+END_SRC
 
 First, set the extended instruction set.
 
+#+name: lcd_gmode-1
 #+BEGIN_SRC asm
     ldi r16, 0b00110100 ;; Enable extended Inst. Set.
     ldi r17, 0x00
@@ -708,16 +830,11 @@ First, set the extended instruction set.
 
 Now set the graphic command.
 
+#+name: lcd_gmode-2
 #+BEGIN_SRC asm
     ldi r16, 0b00110110 ;; Enable Graphic mode
     ldi r17, 0x00
     rcall LCD_INST
-#+END_SRC
-
-#+BEGIN_SRC asm
-    pop r17
-    pop r16
-    ret
 #+END_SRC
 
 *** Set GDRAM Address
@@ -729,19 +846,24 @@ Parameters:
 
 Warning: This commands leaves the graphic mode setted.
 
-
-**** Define the subroutine
-#+BEGIN_SRC asm
+#+name: lcd_gdram_addr
+#+BEGIN_SRC asm :noweb yes
 LCD_GDRAM_ADDR:
+<<lcd_gdram_addr-1>>
+<<lcd_gdram_addr-2>>
+<<lcd_gdram_addr-3>>
+	    ret
 #+END_SRC
 
 **** Set the graphic mode
+#+name: lcd_gdram_addr-1
 #+BEGIN_SRC asm
     rcall LCD_GMODE
 #+END_SRC
 **** Send the vertical value
 Always send the vertical value first. The ST7920 will be waiting for the low value.
 
+#+name: lcd_gdram_addr-2
 #+BEGIN_SRC asm
     push r17
 
@@ -753,7 +875,7 @@ Always send the vertical value first. The ST7920 will be waiting for the low val
 #+END_SRC
 
 **** Send the horizontal value
-
+#+name: lcd_gdram_addr-3
 #+BEGIN_SRC asm
     push r16
     push r17
@@ -768,12 +890,6 @@ Always send the vertical value first. The ST7920 will be waiting for the low val
 #+END_SRC
 
 
-**** End Subroutine
-#+BEGIN_SRC asm
-    ret
-#+END_SRC
-
-
 *** Set GDRAM Value
 This section defines the ~LCD_GDRAM_VAL~ subroutine.
 
@@ -783,12 +899,15 @@ Parameters:
 
 Warning: This subroutine leaves the graphical mode setted on the LCD.
 
-**** Begin subroutine
-#+BEGIN_SRC asm
+#+name: lcd_gdram_val
+#+BEGIN_SRC asm :noweb yes
 LCD_GDRAM_VAL:
+<<lcd_gdram_val-1>>
+	    ret
 #+END_SRC
 
 **** Send values
+#+name: lcd_gdram_val-1
 #+BEGIN_SRC asm
     push r17
 
@@ -804,11 +923,6 @@ LCD_GDRAM_VAL:
     rcall LCD_INST
 #+END_SRC
 
-**** Return from subroutine
-#+BEGIN_SRC asm
-    ret
-#+END_SRC
-
 *** Move from RAM to GDRAM
 This section defines the ~LCD_COPY_GDRAM~. It copies the content from the RAM to the LCD's GDRAM.
 
@@ -821,13 +935,22 @@ Parameters:
 
 This subroutine copies a secuential bytes to the space dictated by the parameters.
 
-**** Define subroutine
-#+BEGIN_SRC asm
+#+name: lcd_copy_gdram
+#+BEGIN_SRC asm :noweb yes
 LCD_COPY_GDRAM:
     push r20
     push r21
     push r22
     push r23
+<<lcd_copy_gdram-1>>
+<<lcd_copy_gdram-2>>
+<<lcd_copy_gdram-3>>
+<<lcd_copy_gdram-4>>
+    pop r23
+    pop r22
+    pop r21
+    pop r20
+    ret
 #+END_SRC
 
 **** Preserve some registers
@@ -844,6 +967,7 @@ r16 and r17 registers will be used for parameters. Move their values to another 
 | r23          | r17 / r21 | Height counter |
 |--------------+-----------+----------------|
 
+#+name: lcd_copy_gdram-1
 #+BEGIN_SRC asm
     mov r20, r16
     mov r21, r17
@@ -854,6 +978,7 @@ r16 and r17 registers will be used for parameters. Move their values to another 
 **** Position the GDRAM
 Position the GDRAM cursor.
 
+#+name: lcd_copy_gdram-2
 #+BEGIN_SRC asm
 .position:
     mov r16, r19
@@ -864,6 +989,7 @@ Position the GDRAM cursor.
 **** Send bytes
 Take one byte from RAM and send it to the LCD. Repeat until width-bytes has been transmitted.
 
+#+name: lcd_copy_gdram-3
 #+BEGIN_SRC asm
 1:
     ld r16, X+
@@ -883,6 +1009,7 @@ Restore the width counter with the total width.
 
 If the height value reaches zero, then end.
 
+#+name: lcd_copy_gdram-4
 #+BEGIN_SRC asm
     dec r23 ;; Decrement height counter
     inc r19
@@ -893,29 +1020,29 @@ If the height value reaches zero, then end.
     brne .position
 #+END_SRC
 
-**** End subroutine
-#+BEGIN_SRC asm
-    pop r23
-    pop r22
-    pop r21
-    pop r20
-    ret
-#+END_SRC
-
 *** Clear GDRAM Command
 This section define the ~LCD_GCLEAR~ subroutine. It fills the GDRAM with a given byte pattern.
 
 Parameters:
 - r16 :: Byte used to fill the GDRAM
 
-**** Begin subroutine
-#+BEGIN_SRC asm
+#+name: lcd_gclear
+#+BEGIN_SRC asm :noweb yes
 LCD_GCLEAR:
     push r17
     push r18
     push r19
     push r20
     mov r20, r16
+<<lcd_gclear-1>>
+<<lcd_gclear-2>>
+<<lcd_gclear-3>>
+<<lcd_gclear-4>>
+    pop r20
+    pop r19
+    pop r18
+    pop r17
+    ret
 #+END_SRC
 
 **** Starting Position 
@@ -924,6 +1051,7 @@ Set the counters at the initial values.
 - r18 :: Vertical counter.
 - r19 :: Horizontal counter.
 
+#+name: lcd_gclear-1
 #+BEGIN_SRC asm
     ldi r16, 0x00
     ldi r17, 0x00
@@ -938,6 +1066,8 @@ Set the counters at the initial values.
 **** Send the bytes
 
 Send the bytes.
+
+#+name: lcd_gclear-2
 #+BEGIN_SRC asm
 2:
     mov r16, r20
@@ -947,6 +1077,7 @@ Send the bytes.
 
 Decrement and check if the vertical counter is in zero.
 
+#+name: lcd_gclear-3
 #+BEGIN_SRC asm
     inc r18
     cpi r18, 16
@@ -955,6 +1086,7 @@ Decrement and check if the vertical counter is in zero.
 
 Decrement and check if the horizontal counter is in zero. If not, restore the vertical counter and repeat.
 
+#+name: lcd_gclear-4
 #+BEGIN_SRC asm
     inc r19
     ldi r18, 0
@@ -962,18 +1094,6 @@ Decrement and check if the horizontal counter is in zero. If not, restore the ve
     cpi r19, 64
     brne 1b
 #+END_SRC
-
-**** End subroutine
-
-#+BEGIN_SRC asm
-    pop r20
-    pop r19
-    pop r18
-    pop r17
-    ret
-#+END_SRC
-
-
 
 ** TODO Cursor Control Command
 ** Home Command
@@ -987,26 +1107,23 @@ The LCD home command has got the following structure:
 |  0 |  0 |   0 |   0 |   0 |   0 |   0 |   0 |   1 | X   |
 |----+----+-----+-----+-----+-----+-----+-----+-----+-----|
 
-*** Begin subroutine
-#+BEGIN_SRC asm
+#+name: lcd_home
+#+BEGIN_SRC asm :noweb yes
 LCD_HOME:
     push r16
     push r17
+<<lcd_home-1>>
+    pop r17
+    pop r16
+    ret
 #+END_SRC
 
 *** Send the command
+#+name: lcd_home-1
 #+BEGIN_SRC asm
     ldi r16, 0x02
     ldi r17, 0x00
     rcall LCD_INST
-#+END_SRC
-
-
-*** End Subroutine
-#+BEGIN_SRC asm
-    pop r17
-    pop r16
-    ret
 #+END_SRC
 
 ** Clear Command
@@ -1020,27 +1137,24 @@ The LCD clear command has got the following structure:
 |  0 | 0  | 0   | 0   | 0   | 0   | 0   | 0   | 0   | 1   |
 |----+----+-----+-----+-----+-----+-----+-----+-----+-----|
 
-*** Begin subroutine
-#+BEGIN_SRC asm
+#+name: lcd_clear
+#+BEGIN_SRC asm :noweb yes
 LCD_CLEAR:
     push r16
     push r17
-#+END_SRC
-
-*** Send the command
-#+BEGIN_SRC asm
-    ldi r16, 0x01
-    ldi r17, 0x00
-    rcall LCD_INST
-#+END_SRC
-
-*** End Subroutine
-#+BEGIN_SRC asm
+<<lcd_clear-1>>
     pop r17
     pop r16
     ret
 #+END_SRC
 
+*** Send the command
+#+name: lcd_clear-1
+#+BEGIN_SRC asm
+    ldi r16, 0x01
+    ldi r17, 0x00
+    rcall LCD_INST
+#+END_SRC
 
 ** TODO Display Status Command
 ** TODO Function Set Command

@@ -1,0 +1,511 @@
+
+This library implements assembler subroutines for the LCD screen with ST7066 LCD controller. This device support the HD44780 instruction set.
+
+* Introduction
+
+The following table shows the connections used on the arduino UNO board (ATMega 328p processor).
+
+|--------------+-------------+------------+-----------|
+| Display port | Display pin | Board Pin  | Port Name |
+|--------------+-------------+------------+-----------|
+| DB7-DB3      |          14 | Digital 5  | PD2       |
+| DB6-DB2      |          13 | Digital 4  | PD3       |
+| DB5-DB1      |          12 | Digital 3  | PD4       |
+| DB4-DB0      |          11 | Digital 2  | PD5       |
+|--------------+-------------+------------+-----------|
+| RW           |           5 | Digital 10 | PB2       |
+| Enable       |           6 | Digital 11 | PB3       |
+| RS           |           4 | Digital 12 | PB4       |
+|--------------+-------------+------------+-----------|
+
+Remember that DDRD managest the I/O mode for PDx ports, PIND are the input and PORTD are the output. The same is for PBx ports with DDRB, PINB and PORTB.
+
+* The library
+The library have the following template:
+
+#+BEGIN_SRC asm :noweb yes :tangle lcd-st7066.asm
+<<license>>
+<<headers>>
+<<lcd_instready>>
+<<lcd_init>>
+<<lcd_senddata>>
+<<lcd_inst>>
+<<lcd_clear>>
+<<lcd_home>>
+<<lcd_ddram_addr>>
+<<lcd_char>>
+#+END_SRC
+
+  
+** License
+ #+name: license
+#+BEGIN_SRC asm
+;; Copyright 2019 Christian Gimenez
+	   
+;; Author: Christian Gimenez
+
+;; usart-lib.asm
+	   
+;; This program is free software: you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
+	   
+;; This program is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+	   
+;; You should have received a copy of the GNU General Public License
+;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#+END_SRC
+
+** Include headers
+#+name: headers
+#+BEGIN_SRC asm
+.include "wait-lib.asm"
+#+END_SRC
+
+** Tell LCD that instruction is ready                              :private:
+Activate the enable and deactivate it to create a falling edge. This will tell to the LCD controller that the instruction bits are setted and ready to be red.
+
+Basically, turn on the third B port, wait 37\mu{}s then turn it off and wait again. The rest of PORTB is maintained intact.
+
+#+name: lcd_instready
+#+BEGIN_SRC asm
+.LCD_INSTREADY:
+        push r16
+        push r17
+
+        sbi OPORTB, 3 ; E
+	
+        ldi r16, 1
+        rcall WAITMS
+	
+        cbi OPORTB, 3 ; E
+
+        rcall WAITMS
+
+        pop r17
+        pop r16
+        ret
+#+END_SRC
+
+** Initialize LCD subroutine
+The board pins must be initialized along with the LCD. In order to give instruction to the LCD
+
+#+name: lcd_init
+#+BEGIN_SRC asm :noweb yes
+LCD_INIT:
+        push r16
+        push r17
+<<lcd_init-set_ports>>
+<<lcd_init-blank_ports>>
+<<lcd_init-step_1>>
+<<lcd_init-step_2>>
+<<lcd_init-step_3>>
+<<lcd_init-step_4>>
+<<lcd_init-step_5>>
+<<lcd_init-step_6>>
+<<lcd_init-step_7>>
+<<lcd_init-step_8>>
+<<lcd_init-step_clear_ddram_addr>>
+        pop r17
+        pop r16
+        ret
+#+END_SRC
+
+*** Set port modes
+Set the Arduino ports in output mode. Firts, set the D ports mode (DDRD) and then the B ports (DDRB).
+
+#+name: lcd_init-set_ports
+#+BEGIN_SRC asm
+        sbi ODDRD, 2
+        sbi ODDRD, 3
+        sbi ODDRD, 4
+        sbi ODDRD, 5    
+
+        sbi ODDRB, 4 ;; RS
+        sbi ODDRB, 3 ;; E
+        sbi ODDRB, 2 ;; RW
+#+END_SRC
+
+Also, blank the D and B port just in case: set all pins to zero.
+
+#+name: lcd_init-blank_ports
+#+BEGIN_SRC asm
+        cbi OPORTD, 2
+        cbi OPORTD, 3
+        cbi OPORTD, 4
+        cbi OPORTD, 5
+
+        cbi OPORTB, 4
+        cbi OPORTB, 3
+        cbi OPORTB, 2
+#+END_SRC
+
+*** Initialization process
+The initialization process is required to tell the LCD to use only 4 inputs and not all 8 inputs, to turn on the display and to clear it. Also, it sets it ready to entry mode.
+
+The LCD display supports 8 inputs with E, RS and RW. This means that all instructions are provided with 1 byte: 1 byte is setted on the inputs, E is enabled and disabled to provide the first instruction. But it is possible to use 4 inputs: send the first 4 bits, enable and disable E, and then send the next 4 bits. The ST7066 controller must know which mode is going to be used to get the sequence right.
+
+The sequence start waiting 40 milliseconds.
+
+#+name: lcd_init-step_1
+#+BEGIN_SRC asm
+        ldi r16, 0x40
+        rcall WAITMS
+#+END_SRC
+
+Then, send the first function set instruction 0b0011 (RS, RW = 0, 0) and wait. 
+
+#+name: lcd_init-step_2
+#+BEGIN_SRC asm
+        in r16, OPORTD
+        andi r16, 0b11000011	; 0b011
+        ori r16, 0b00001100
+        out OPORTD, r16
+
+        rcall .LCD_INSTREADY
+
+        ldi r16, 5
+        rcall WAITMS
+#+END_SRC
+
+Send the same instruction twice:
+
+#+name: lcd_init-step_3
+#+BEGIN_SRC asm
+        andi r16, 0b11000011
+        ori r16,0b00001100 	; 0b0011
+        out OPORTD, r16
+        rcall .LCD_INSTREADY
+        ldi r16, 1
+        rcall WAITMS
+
+        andi r16, 0b11000011	
+        ori r16,0b00001100	; 0b0011
+        out OPORTD, r16
+        rcall .LCD_INSTREADY
+#+END_SRC
+
+Send instruction 0b0010. After this, normal 8-bit instruction can be sent.
+
+#+name: lcd_init-step_4
+#+BEGIN_SRC asm
+        andi r16, 0b11000011
+        ori r16,0b00001000	; 0b0010
+        out OPORTD, r16
+        rcall .LCD_INSTREADY
+#+END_SRC
+
+After that, send the instruction 0x0010_0011 (RS, RW = 0, 0) and wait.
+The last 11 mean N,F = 1,1 (N is two line mode enabled and F is double font size).
+
+#+name: lcd_init-step_5
+#+BEGIN_SRC asm
+        ldi r16, 0b00101100 ; N F
+        rcall LCD_INST
+#+END_SRC
+
+Turn the display on. This is the instruction 0b0000_1DCB, where D is the display on/off, C is the cursor on/off and B is blinking cursor on/off. At startup, it is best to see the cursor.
+
+#+name: lcd_init-step_6
+#+BEGIN_SRC asm
+        ldi r16, 0b00001111
+        rcall LCD_INST
+#+END_SRC
+
+Clear the display. This is the instruction 0b0000_0001. A longer waiting is required to let the LCD controller erase all data.
+
+#+name: lcd_init-step_7
+#+BEGIN_SRC asm
+        rcall LCD_CLEAR 
+#+END_SRC
+
+Send the entry mode set instruction: 0b0000_0110. The last 10 means I/D,S = 1,0, where I/D is the cursor direction and the S is the shift enabled. It is better to leave the shift turned of and the screen static at the startup.
+
+#+name: lcd_init-step_8
+#+BEGIN_SRC asm
+        ldi r16, 0b00000110
+        rcall LCD_INST	
+#+END_SRC
+
+A plus, set the DDRAM at position 0. This will enable the user to write a character immediately.
+
+#+name: lcd_init-clear_ddram_addr
+#+BEGIN_SRC asm
+        ldi r16, 0b00000000
+        rcall LCD_DDRAM_ADDR
+#+END_SRC
+
+** TODO Send 4-bit data                                            :private:
+** Send 8-bit data
+Send data to the LCD. RS and RW outputs are not touched.
+
+Parameters:
+- r16 :: The byte to send to the LCD.
+
+#+name: lcd_senddata
+#+BEGIN_SRC asm :noweb yes
+LCD_SENDDATA:
+        push r18
+
+<<lcd_senddata-send>>
+
+        pop r18
+        ret
+#+END_SRC
+
+This moves the data to the middle bits because the output are connected on them.
+
+Copy the upper four bits, shift the bits to the right and send it. Then, copy the lower four bits, shift the bits to the left and send it.
+
+The shift is needed because the 2nd port (PD2) is used and not the 0 one (PD0).
+
+#+name: lcd_senddata-send
+#+BEGIN_SRC asm
+        mov r18, r16
+        andi r16, 0b11110000
+        lsr r16
+        lsr r16
+        out OPORTD, r16
+        rcall .LCD_INSTREADY
+
+        mov r16, r18
+        andi r16, 0b00001111
+        lsl r16
+        lsl r16
+        out OPORTD, r16
+        rcall .LCD_INSTREADY
+#+END_SRC
+
+
+** Send instruction
+The following subroutine send an instruction to the LCD controller. The RS and RW is turned off.
+
+Parameters:
+- r16 :: Instruction to send (8 bits)
+
+#+name: lcd_inst
+#+BEGIN_SRC asm :noweb yes
+LCD_INST:
+        cbi OPORTB, 4           ; RS
+        cbi OPORTB, 2           ; RW
+
+        rcall LCD_SENDDATA
+
+        ret
+#+END_SRC
+
+** Clear screen instruction
+Send the clear screen instruction.
+
+No parameters needed.
+
+#+name: lcd_clear
+#+BEGIN_SRC asm
+LCD_CLEAR:
+        push r16
+	
+        ldi r16, 0b00000001
+        rcall LCD_INST
+
+        ldi r16, 10
+        rcall WAITMS
+
+        pop r16
+        ret
+#+END_SRC
+
+** Return home instruction
+Send the "return home" instruction.
+
+No parameters needed.
+
+#+name: lcd_home
+#+BEGIN_SRC asm
+LCD_HOME:
+        push r16
+
+        ldi r16, 0b00000010
+        rcall LCD_INST
+
+        pop r16
+        ret
+#+END_SRC
+
+** Set DDRAM address instruction
+Set the DDRAM address and toggle the DDRAM usage instead of the CGRAM. Any character sended after this will set the DDRAM data and not the CGRAM data.
+
+Parameters:
+- r16 :: The DDRAM address. Only bits 0-6 will be used.
+
+#+name: lcd_ddram_addr
+#+BEGIN_SRC asm
+LCD_DDRAM_ADDR:
+        ori r16, 0b10000000
+        rcall LCD_INST
+
+        ret
+#+END_SRC
+
+** Send character instruction
+Send a character to the LCD controller. The RS and RW must be setted accordingly.
+
+Parameters:
+- r16 :: Character byte to send.
+
+#+name: lcd_char
+#+BEGIN_SRC asm
+LCD_CHAR:
+        sbi OPORTB, 4		; RS
+        cbi OPORTB, 2		; RW
+
+        rcall LCD_SENDDATA
+
+        cbi OPORTB, 4		; RS
+        ret
+#+END_SRC
+
+
+
+** TODO Goto first row
+01
+45
+23
+67
+** TODO Goto second row
+** TODO Goto third row
+** TODO Goto fourth row
+
+* Hello world Test
+
+#+BEGIN_SRC asm :noweb yes :tangle tests/lcd-st7066/hello.asm
+<<license>>
+
+;; .include "../../vector-inc.asm"
+.include "../../registers-inc.asm"
+
+.text
+RESET:
+      rcall LCD_INIT
+
+	ldi r16, 'H'
+	rcall LCD_CHAR
+	ldi r16, 'e'
+	rcall LCD_CHAR
+	ldi r16, 'l'
+	rcall LCD_CHAR
+	ldi r16, 'l'
+	rcall LCD_CHAR
+	ldi r16, 'O'
+	rcall LCD_CHAR
+
+
+1:
+	rjmp 1b
+.include "../../lcd-st7066.asm"
+#+END_SRC
+
+* Number test
+This example show the position of each cell by printing one digit after another.
+
+The register r17 contains the character from '0' to '9'. 
+
+#+BEGIN_SRC asm :noweb yes :tangle tests/lcd-st7066/numbers.asm
+<<license>>
+
+.include "../../registers-inc.asm"
+.text
+RESET:
+	rcall LCD_INIT
+2:
+
+	ldi r17, '0'		; r17 : char to show
+	dec r17
+1:
+	inc r17
+	mov r16, r17
+	rcall LCD_CHAR
+
+	ldi r16, 250
+	rcall WAITMS
+	ldi r16, 250
+	rcall WAITMS
+
+	cpi r17, '9'
+	brne 1b
+	rjmp 2b
+
+.include "../../lcd-st7066.asm"
+#+END_SRC
+
+
+* Things to do
+
+** TODO Replace sts and lds with in and out
+in and out instructions are faster.
+
+
+* Meta     :noexport:
+
+  # ----------------------------------------------------------------------
+  #+TITLE:  LCD with ST7066 LCD Controller
+  #+AUTHOR: Christian Gimenez
+  #+DATE:   06 feb 2021
+  #+EMAIL:
+  #+DESCRIPTION: 
+  #+KEYWORDS: 
+  #+COLUMNS: %40ITEM(Task) %17Effort(Estimated Effort){:} %CLOCKSUM
+  
+  #+STARTUP: inlineimages hidestars content hideblocks entitiespretty
+  #+STARTUP: indent fninline latexpreview
+
+  #+OPTIONS: H:3 num:t toc:t \n:nil @:t ::t |:t ^:{} -:t f:t *:t <:t
+  #+OPTIONS: TeX:t LaTeX:t skip:nil d:nil todo:t pri:nil tags:not-in-toc
+  #+OPTIONS: tex:imagemagick
+
+  #+TODO: TODO(t!) CURRENT(c!) PAUSED(p!) | DONE(d!) CANCELED(C!@)
+
+  # -- Export
+  #+LANGUAGE: en
+  #+LINK_UP:   
+  #+LINK_HOME: 
+  #+EXPORT_SELECT_TAGS: export
+  #+EXPORT_EXCLUDE_TAGS: noexport
+
+  # -- HTML Export
+  #+INFOJS_OPT: view:info toc:t ftoc:t ltoc:t mouse:underline buttons:t path:libs/org-info.js
+  #+HTML_LINK_UP: index.html
+  #+HTML_LINK_HOME: index.html
+  #+XSLT:
+
+  # -- For ox-twbs or HTML Export
+  # #+HTML_HEAD: <link href="libs/bootstrap.min.css" rel="stylesheet">
+  # -- -- LaTeX-CSS
+  # #+HTML_HEAD: <link href="css/style-org.css" rel="stylesheet">
+
+  # #+HTML_HEAD: <script src="libs/jquery.min.js"></script> 
+  # #+HTML_HEAD: <script src="libs/bootstrap.min.js"></script>
+
+
+  # -- LaTeX Export
+  # #+LATEX_CLASS: article
+  # -- -- Tikz
+  # #+LATEX_HEADER: \usepackage{tikz}
+  # #+LATEX_HEADER: \usetikzlibrary{shapes.geometric}
+  # #+LATEX_HEADER: \usetikzlibrary{shapes.symbols}
+  # #+LATEX_HEADER: \usetikzlibrary{positioning}
+  # #+LATEX_HEADER: \usetikzlibrary{trees}
+
+  # #+LATEX_HEADER_EXTRA:
+
+  # Local Variables:
+  # org-hide-emphasis-markers: t
+  # org-use-sub-superscripts: "{}"
+  # fill-column: 80
+  # visual-line-fringe-indicators: t
+  # ispell-local-dictionary: "british"
+  # org-src-preserve-indentation: t
+  # End:

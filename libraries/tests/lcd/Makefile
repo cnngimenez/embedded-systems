@@ -1,14 +1,14 @@
 # File to compile
 ifndef FILE
-FILE=lcd-graphics2
+FILE=lcd-graphics
 endif
 
 # Compiling variables
 # --------------------------------------------------
 
 # Instruction set architecture (ISA):
-MMCU=atmega2560
-# MMCU=atmega328p
+# MMCU=atmega2560
+MMCU=atmega328p
 
 # Optimizations (For debugging with simavr you should deactivate this)
 # OPT=-Os
@@ -30,16 +30,16 @@ ifndef PORT
 PORT=/dev/ttyACM0
 endif
 # Type of MCU connected to the programmer
-PARTNO=atmega2560
-# PARTNO=atmega328p
+# PARTNO=atmega2560
+PARTNO=atmega328p
 # Programmer id
-PROGID=wiring
-# PROGID=arduino
+# PROGID=wiring
+PROGID=arduino
 # Baud rate
 BAUD=115200
 # Linking Mode to use
-LD_MODE=avr6
-# LD_MODE=avr5
+# LD_MODE=avr6
+LD_MODE=avr5
 # Where does the data memory start?
 DATAMEMSTART=0x800100
 
