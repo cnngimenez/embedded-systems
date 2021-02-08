@@ -739,7 +739,7 @@ Move the cursor to the second row.
 LCD_SECOND_ROW:
         push r16
 
-        ldi r16, 40
+        ldi r16, 64
         rcall LCD_DDRAM_ADDR
 
         pop r16
@@ -769,7 +769,7 @@ Move the cursor to the fourth row.
 LCD_FOURTH_ROW:
         push r16
 
-        ldi r16, 60
+        ldi r16, 84
         rcall LCD_DDRAM_ADDR
 
         pop r16
@@ -849,7 +849,6 @@ RESET:
 	rjmp 1b
 .include "../../lcd-st7066-328p.asm"
 #+END_SRC
-
 
 * Hello world with string example
 This example shows how to load a string into the ATMega memory and display it on the LCD.
@@ -962,7 +961,6 @@ Parameters:
 	ret
 #+END_SRC
 
-
 * Number test
 This example show the position of each cell by printing one digit after another.
 
@@ -996,6 +994,123 @@ RESET:
 .include "../../lcd-st7066-328p.asm"
 #+END_SRC
 
+* Position test
+This example show the position in DDRAM address of each row.
+
+#+BEGIN_SRC asm :noweb yes :tangle tests/lcd-st7066/position.asm
+<<license>>
+
+.include "../../registers-inc.asm"
+.text
+RESET:
+        rcall LCD_INIT
+	  ldi r16, 0b00000010
+        rcall LCD_FNCSET
+
+        ldi r16, '0'
+        rcall LCD_CHAR
+
+        ldi r16, 10
+        rcall LCD_DDRAM_ADDR
+        ldi r16, '1'
+        rcall LCD_CHAR
+
+        ldi r16, 20
+        rcall LCD_DDRAM_ADDR
+        ldi r16, '2'
+        rcall LCD_CHAR
+
+        ldi r16, 30
+        rcall LCD_DDRAM_ADDR
+        ldi r16, '3'
+        rcall LCD_CHAR
+
+        ldi r16, 64
+        rcall LCD_DDRAM_ADDR
+        ldi r16, '4'
+        rcall LCD_CHAR
+
+        ldi r16, 74
+        rcall LCD_DDRAM_ADDR
+        ldi r16, '5'
+        rcall LCD_CHAR
+
+        ldi r16, 84
+        rcall LCD_DDRAM_ADDR
+        ldi r16, '6'
+        rcall LCD_CHAR
+
+        ldi r16, 94
+        rcall LCD_DDRAM_ADDR
+        ldi r16, '7'
+        rcall LCD_CHAR
+
+        ldi r16, 255
+        rcall WAITMS
+        ldi r16, 255
+        rcall WAITMS
+        ldi r16, 255
+        rcall WAITMS
+        ldi r16, 255
+        rcall WAITMS
+
+        rcall LCD_CLEAR
+
+        rcall LCD_FIRST_ROW
+        ldi r16, '1'
+        rcall LCD_CHAR
+        ldi r16, ' '
+        rcall LCD_CHAR
+        ldi r16, 'R'
+        rcall LCD_CHAR
+        ldi r16, 'o'
+        rcall LCD_CHAR
+        ldi r16, 'w'
+        rcall LCD_CHAR
+
+        rcall LCD_SECOND_ROW
+        ldi r16, '2'
+        rcall LCD_CHAR
+        ldi r16, ' '
+        rcall LCD_CHAR
+        ldi r16, 'R'
+        rcall LCD_CHAR
+        ldi r16, 'o'
+        rcall LCD_CHAR
+        ldi r16, 'w'
+        rcall LCD_CHAR
+
+        rcall LCD_THIRD_ROW
+        ldi r16, '3'
+        rcall LCD_CHAR
+        ldi r16, ' '
+        rcall LCD_CHAR
+        ldi r16, 'R'
+        rcall LCD_CHAR
+        ldi r16, 'o'
+        rcall LCD_CHAR
+        ldi r16, 'w'
+        rcall LCD_CHAR
+
+        rcall LCD_FOURTH_ROW
+        ldi r16, '4'
+        rcall LCD_CHAR
+        ldi r16, ' '
+        rcall LCD_CHAR
+        ldi r16, 'R'
+        rcall LCD_CHAR
+        ldi r16, 'o'
+        rcall LCD_CHAR
+        ldi r16, 'w'
+        rcall LCD_CHAR
+
+1:
+        sleep
+        break
+        rjmp 1b
+
+.include "../../lcd-st7066-328p.asm"
+#+END_SRC
 
 * Meta     :noexport:
 

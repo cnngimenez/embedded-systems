@@ -216,7 +216,7 @@ LCD_FIRST_ROW:
 LCD_SECOND_ROW:
         push r16
 
-        ldi r16, 40
+        ldi r16, 64
         rcall LCD_DDRAM_ADDR
 
         pop r16
@@ -232,7 +232,7 @@ LCD_THIRD_ROW:
 LCD_FOURTH_ROW:
         push r16
 
-        ldi r16, 60
+        ldi r16, 84
         rcall LCD_DDRAM_ADDR
 
         pop r16
