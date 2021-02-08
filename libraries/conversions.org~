@@ -1,0 +1,98 @@
+
+* Byte to hexadecimal string
+
+
+
+** Convert 4bits to hex
+Parameters:
+- r16 :: The four bits to transform (only the lower bits are used).
+
+Output:
+- r17 :: The hexadecimal number as ASCII character.
+
+First, clean the input leaving the lower bits only.
+If these bits are between 0 and 9, add it to the ASCII code of '0' character. If number is greater than 9, substract 10 and add it to the 'A' ASCII code character.
+
+#+BEGIN_SRC asm 
+.4bits_to_hex:
+	    push r16
+
+	    andi r16, 0b00001111
+        cpi r16, 10
+        brlo 1f
+        ;; r16 is greater or equal than 10
+        subi r16, 10
+        ldi r17, 'A'
+        add r16, r17
+        rjmp 2f
+1:
+        ;; r16 is lower than 10
+        ldi r17, '0'
+        add r16, r17
+2:
+        pop r16
+        ret
+#+END_SRC
+* Hexadecimal string to byte
+
+
+* Meta     :noexport:
+
+  # ----------------------------------------------------------------------
+  #+TITLE:  Conversions
+  #+AUTHOR: Christian Gimenez
+  #+DATE:   08 feb 2021
+  #+EMAIL:
+  #+DESCRIPTION: 
+  #+KEYWORDS: 
+  #+COLUMNS: %40ITEM(Task) %17Effort(Estimated Effort){:} %CLOCKSUM
+  
+  #+STARTUP: inlineimages hidestars content hideblocks entitiespretty
+  #+STARTUP: indent fninline latexpreview
+
+  #+OPTIONS: H:3 num:t toc:t \n:nil @:t ::t |:t ^:{} -:t f:t *:t <:t
+  #+OPTIONS: TeX:t LaTeX:t skip:nil d:nil todo:t pri:nil tags:not-in-toc
+  #+OPTIONS: tex:imagemagick
+
+  #+TODO: TODO(t!) CURRENT(c!) PAUSED(p!) | DONE(d!) CANCELED(C!@)
+
+  # -- Export
+  #+LANGUAGE: en
+  #+LINK_UP:   
+  #+LINK_HOME: 
+  #+EXPORT_SELECT_TAGS: export
+  #+EXPORT_EXCLUDE_TAGS: noexport
+
+  # -- HTML Export
+  #+INFOJS_OPT: view:info toc:t ftoc:t ltoc:t mouse:underline buttons:t path:libs/org-info.js
+  #+HTML_LINK_UP: index.html
+  #+HTML_LINK_HOME: index.html
+  #+XSLT:
+
+  # -- For ox-twbs or HTML Export
+  # #+HTML_HEAD: <link href="libs/bootstrap.min.css" rel="stylesheet">
+  # -- -- LaTeX-CSS
+  # #+HTML_HEAD: <link href="css/style-org.css" rel="stylesheet">
+
+  # #+HTML_HEAD: <script src="libs/jquery.min.js"></script> 
+  # #+HTML_HEAD: <script src="libs/bootstrap.min.js"></script>
+
+
+  # -- LaTeX Export
+  # #+LATEX_CLASS: article
+  # -- -- Tikz
+  # #+LATEX_HEADER: \usepackage{tikz}
+  # #+LATEX_HEADER: \usetikzlibrary{shapes.geometric}
+  # #+LATEX_HEADER: \usetikzlibrary{shapes.symbols}
+  # #+LATEX_HEADER: \usetikzlibrary{positioning}
+  # #+LATEX_HEADER: \usetikzlibrary{trees}
+
+  # #+LATEX_HEADER_EXTRA:
+
+  # Local Variables:
+  # org-hide-emphasis-markers: t
+  # org-use-sub-superscripts: "{}"
+  # fill-column: 80
+  # visual-line-fringe-indicators: t
+  # ispell-local-dictionary: "british"
+  # End:
