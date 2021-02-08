@@ -91,6 +91,6 @@ RESET:
 	pop ZL
 	ret
 
-.include "../../lcd-st7066.asm"
+.include "../../lcd-st7066-328p.asm"
 
 STATIC_DATA:

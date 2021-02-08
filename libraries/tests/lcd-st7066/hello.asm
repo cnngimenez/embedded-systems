@@ -40,4 +40,4 @@ RESET:
 	sleep
 	break
 	rjmp 1b
-.include "../../lcd-st7066.asm"
+.include "../../lcd-st7066-328p.asm"

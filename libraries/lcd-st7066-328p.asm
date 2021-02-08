@@ -51,17 +51,17 @@
         pop r16
         pop r17
         ret
-LCD_INIT:
-        push r16
-        push r17
+.SET_OUTPUTPORTMODE:
         sbi ODDRD, 2
         sbi ODDRD, 3
         sbi ODDRD, 4
         sbi ODDRD, 5    
 
-        sbi ODDRB, 4 ;; RS
-        sbi ODDRB, 3 ;; E
-        sbi ODDRB, 2 ;; RW
+        sbi ODDRB, 4 ; RS
+        sbi ODDRB, 3 ; E
+        sbi ODDRB, 2 ; RW
+        ret
+.BLANK_PORTS:
         cbi OPORTD, 2
         cbi OPORTD, 3
         cbi OPORTD, 4
@@ -70,6 +70,25 @@ LCD_INIT:
         cbi OPORTB, 4
         cbi OPORTB, 3
         cbi OPORTB, 2
+        ret
+.macro clear_rs
+        cbi OPORTB, 4           ; RS
+.endm
+.macro clear_rw
+        cbi OPORTB, 2           ; RW	
+.endm
+.macro set_rs
+        sbi OPORTB, 4		; RS
+.endm
+.macro set_rw
+        sbi OPORTB, 2		; RW
+.endm
+
+LCD_INIT:
+        push r16
+        push r17
+        rcall .SET_OUTPUTPORTMODE
+        rcall .BLANK_PORTS
         ldi r16, 0x40
         rcall WAITMS
         ldi r16, 0b00000011 	; 0b0011
@@ -103,25 +122,23 @@ LCD_SENDDATA:
         push r16
 
         mov r18, r16
-        andi r16, 0b11110000
+        andi r16, 0b11110000	
         lsr r16
         lsr r16
-        out OPORTD, r16
-        rcall .LCD_INSTREADY
+        lsr r16
+        lsr r16
+        rcall .LCD_SEND4BITS
 
         mov r16, r18
         andi r16, 0b00001111
-        lsl r16
-        lsl r16
-        out OPORTD, r16
-        rcall .LCD_INSTREADY
+        rcall .LCD_SEND4BITS
 
         pop r16
         pop r18
         ret
 LCD_INST:
-        cbi OPORTB, 4           ; RS
-        cbi OPORTB, 2           ; RW
+        clear_rs
+        clear_rw
 
         rcall LCD_SENDDATA
 
@@ -203,12 +220,12 @@ LCD_DDRAM_ADDR:
         pop r16
         ret
 LCD_CHAR:
-        sbi OPORTB, 4		; RS
-        cbi OPORTB, 2		; RW
+        set_rs
+        clear_rw
 
         rcall LCD_SENDDATA
 
-        cbi OPORTB, 4		; RS
+        clear_rs
         ret
 LCD_FIRST_ROW:
         rcall LCD_HOME

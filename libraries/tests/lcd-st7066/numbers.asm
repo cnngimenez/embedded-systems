@@ -39,4 +39,4 @@ RESET:
 	brne 1b
 	rjmp 2b
 
-.include "../../lcd-st7066.asm"
+.include "../../lcd-st7066-328p.asm"
