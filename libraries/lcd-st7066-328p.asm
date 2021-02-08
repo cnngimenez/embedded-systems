@@ -281,3 +281,48 @@ LCD_STRING:
         pop XH
         pop XL
         ret
+LCD_SENDHEX:
+        push r16
+        push r18
+        push r17
+
+        mov r18, r16
+        lsr r16
+        lsr r16
+        lsr r16
+        lsr r16
+
+        cpi r16, 10
+        brlo 1f
+        ;; r16 is greater or equal than 10
+        subi r16, 10
+        ldi r17, 'A'
+        add r16, r17
+        rjmp 2f
+1:
+        ;; r16 is lower than 10
+        ldi r17, '0'
+        add r16, r17
+2:
+        rcall LCD_CHAR
+        mov r16, r18
+        andi r16, 0b00001111
+
+        cpi r16, 10
+        brlo 1f
+        ;; r16 is greater or equal than 10
+        subi r16, 10
+        ldi r17, 'A'
+        add r16, r17
+        rjmp 2f
+1:
+        ;; r16 is lower than 10
+        ldi r17, '0'
+        add r16, r17
+2:
+        rcall LCD_CHAR
+
+        pop r17
+        pop r18
+        pop r16
+        ret

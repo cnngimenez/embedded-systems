@@ -94,6 +94,7 @@ The ~<<independent_instructions>>~ are assembler subroutines that can works rega
 <<lcd_third_row>>
 <<lcd_fourth_row>>
 <<lcd_string>>
+<<lcd_sendhex>>
 #+END_SRC
 
   
@@ -818,6 +819,78 @@ LCD_STRING:
 #+END_SRC
 
 
+** Send number in Hex
+Convert a number in r16 to a string with its hexadecimal number representation and send it to the LCD.
+
+Parameters:
+- r16 :: The number to convert to string and to send.
+
+#+name: lcd_sendhex
+#+BEGIN_SRC asm :noweb yes
+LCD_SENDHEX:
+        push r16
+        push r18
+        push r17
+
+<<lcd_sendhex-convert_higher>>
+<<lcd_sendhex-convert_lower>>
+
+        pop r17
+        pop r18
+        pop r16
+        ret	
+#+END_SRC
+
+Converting a byte to hex is achieved by 4 bits: first convert the higher 4 bits and then the lower ones.
+If 4 bits is between 0 and 9, add it to the ASCII code of '0' character. If number is greater than 9, substract 10 and add it to the 'A' ASCII code character.
+
+This code converts the higher 4 bits.
+
+#+name: lcd_sendhex-convert_higher
+#+BEGIN_SRC asm
+        mov r18, r16
+        lsr r16
+        lsr r16
+        lsr r16
+        lsr r16
+
+        cpi r16, 10
+        brlo 1f
+        ;; r16 is greater or equal than 10
+        subi r16, 10
+        ldi r17, 'A'
+        add r16, r17
+        rjmp 2f
+1:
+        ;; r16 is lower than 10
+        ldi r17, '0'
+        add r16, r17
+2:
+        rcall LCD_CHAR
+#+END_SRC
+
+The following code converts the lower 4 bits. First, restore the r16 register and clear the higher bits, then proceed as before.
+
+#+name: lcd_sendhex-convert_lower
+#+BEGIN_SRC asm
+        mov r16, r18
+        andi r16, 0b00001111
+
+        cpi r16, 10
+        brlo 1f
+        ;; r16 is greater or equal than 10
+        subi r16, 10
+        ldi r17, 'A'
+        add r16, r17
+        rjmp 2f
+1:
+        ;; r16 is lower than 10
+        ldi r17, '0'
+        add r16, r17
+2:
+        rcall LCD_CHAR
+#+END_SRC
+
 * Hello world example
 This is a basic Hello world example. It can be used to test if the connection and the display works properly.
 
@@ -1108,6 +1181,34 @@ RESET:
         sleep
         break
         rjmp 1b
+
+.include "../../lcd-st7066-328p.asm"
+#+END_SRC
+
+* Hex counter example
+This example tests the ~LCD_SENDHEX~ subroutine. It just counts from 0 to FF (1 byte).
+
+#+BEGIN_SRC asm :noweb yes :tangle tests/lcd-st7066/hextest.asm
+<<license>>
+
+.include "../../registers-inc.asm"
+.text
+RESET:
+	rcall LCD_INIT
+
+	ldi r17, 0
+
+1:
+	rcall LCD_HOME
+	mov r16, r17
+	rcall LCD_SENDHEX
+	inc r17
+		
+	ldi r16, 250
+	rcall WAITMS
+	ldi r16, 250
+	rcall WAITMS
+	rjmp 1b
 
 .include "../../lcd-st7066-328p.asm"
 #+END_SRC

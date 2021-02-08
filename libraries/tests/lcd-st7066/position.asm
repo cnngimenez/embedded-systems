@@ -62,65 +62,64 @@ RESET:
         ldi r16, '7'
         rcall LCD_CHAR
 
+        ldi r16, 255
+        rcall WAITMS
+        ldi r16, 255
+        rcall WAITMS
+        ldi r16, 255
+        rcall WAITMS
+        ldi r16, 255
+        rcall WAITMS
 
-	ldi r16, 255
-	rcall WAITMS
-	ldi r16, 255
-	rcall WAITMS
-	ldi r16, 255
-	rcall WAITMS
-	ldi r16, 255
-	rcall WAITMS
+        rcall LCD_CLEAR
 
-	rcall LCD_CLEAR
+        rcall LCD_FIRST_ROW
+        ldi r16, '1'
+        rcall LCD_CHAR
+        ldi r16, ' '
+        rcall LCD_CHAR
+        ldi r16, 'R'
+        rcall LCD_CHAR
+        ldi r16, 'o'
+        rcall LCD_CHAR
+        ldi r16, 'w'
+        rcall LCD_CHAR
 
-	rcall LCD_FIRST_ROW
-	ldi r16, '0'
-	rcall LCD_CHAR
-	ldi r16, ' '
-	rcall LCD_CHAR
-	ldi r16, 'R'
-	rcall LCD_CHAR
-	ldi r16, 'o'
-	rcall LCD_CHAR
-	ldi r16, 'w'
-	rcall LCD_CHAR
+        rcall LCD_SECOND_ROW
+        ldi r16, '2'
+        rcall LCD_CHAR
+        ldi r16, ' '
+        rcall LCD_CHAR
+        ldi r16, 'R'
+        rcall LCD_CHAR
+        ldi r16, 'o'
+        rcall LCD_CHAR
+        ldi r16, 'w'
+        rcall LCD_CHAR
 
-	rcall LCD_SECOND_ROW
-	ldi r16, '2'
-	rcall LCD_CHAR
-	ldi r16, ' '
-	rcall LCD_CHAR
-	ldi r16, 'R'
-	rcall LCD_CHAR
-	ldi r16, 'o'
-	rcall LCD_CHAR
-	ldi r16, 'w'
-	rcall LCD_CHAR
+        rcall LCD_THIRD_ROW
+        ldi r16, '3'
+        rcall LCD_CHAR
+        ldi r16, ' '
+        rcall LCD_CHAR
+        ldi r16, 'R'
+        rcall LCD_CHAR
+        ldi r16, 'o'
+        rcall LCD_CHAR
+        ldi r16, 'w'
+        rcall LCD_CHAR
 
-	rcall LCD_THIRD_ROW
-	ldi r16, '3'
-	rcall LCD_CHAR
-	ldi r16, ' '
-	rcall LCD_CHAR
-	ldi r16, 'R'
-	rcall LCD_CHAR
-	ldi r16, 'o'
-	rcall LCD_CHAR
-	ldi r16, 'w'
-	rcall LCD_CHAR
-
-	rcall LCD_FOURTH_ROW
-	ldi r16, '4'
-	rcall LCD_CHAR
-	ldi r16, ' '
-	rcall LCD_CHAR
-	ldi r16, 'R'
-	rcall LCD_CHAR
-	ldi r16, 'o'
-	rcall LCD_CHAR
-	ldi r16, 'w'
-	rcall LCD_CHAR
+        rcall LCD_FOURTH_ROW
+        ldi r16, '4'
+        rcall LCD_CHAR
+        ldi r16, ' '
+        rcall LCD_CHAR
+        ldi r16, 'R'
+        rcall LCD_CHAR
+        ldi r16, 'o'
+        rcall LCD_CHAR
+        ldi r16, 'w'
+        rcall LCD_CHAR
 
 1:
         sleep
