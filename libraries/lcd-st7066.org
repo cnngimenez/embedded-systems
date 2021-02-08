@@ -5,6 +5,7 @@ This library implements assembler subroutines for the LCD screen with ST7066 LCD
 
 The following table shows the connections used on the arduino UNO board (ATMega 328p processor).
 
+#+caption: Arduino UNO board connections.
 |--------------+-------------+------------+-----------|
 | Display port | Display pin | Board Pin  | Port Name |
 |--------------+-------------+------------+-----------|
@@ -20,6 +21,20 @@ The following table shows the connections used on the arduino UNO board (ATMega 
 
 Remember that DDRD managest the I/O mode for PDx ports, PIND are the input and PORTD are the output. The same is for PBx ports with DDRB, PINB and PORTB.
 
+#+caption: Arduino Mega board connections.
+|--------------+-------------+------------+-----------|
+| Display port | Display pin | Board Pin  | Port Name |
+|--------------+-------------+------------+-----------|
+| DB7-DB3      |          14 | Digital 37 | PC0       |
+| DB6-DB2      |          13 | Digital 36 | PC1       |
+| DB5-DB1      |          12 | Digital 35 | PC2       |
+| DB4-DB0      |          11 | Digital 34 | PC3       |
+|--------------+-------------+------------+-----------|
+| RW           |           5 | Digital 33 | PC4       |
+| Enable       |           6 | Digital 32 | PC5       |
+| RS           |           4 | Digital 31 | PC6       |
+|--------------+-------------+------------+-----------|
+
 ** Two RAMS: DDRAM and CGRAM
 This controller has two RAM memories: Display RAM (DDRAM) and Character Generation RAM (CGRAM).
 
@@ -30,11 +45,38 @@ The CGRAM is used to create new characters.
 * The library
 The library have the following template:
 
-#+BEGIN_SRC asm :noweb yes :tangle lcd-st7066.asm
+#+BEGIN_SRC asm :noweb yes :tangle lcd-st7066-328p.asm
 <<license>>
 <<headers>>
 <<lcd_instready>>
 <<lcd_send4bits>>
+<<set_outputportmode>>
+<<blank_ports>>
+<<rsrw_macros>>
+
+<<independent_instructions>>
+#+END_SRC
+
+The library is very dependant on the port used. However, subroutines that are heavy dependant on the port used are listed separately above.
+
+Thus, when using the Arduino Mega board (with ATMega 2560 processor), these functions must be changed. So, this is the template for the latter board:
+
+#+BEGIN_SRC asm :noweb yes :tangle lcd-st7066-2560.asm
+<<license>>
+<<headers>>
+<<lcd_instready-2560>>
+<<lcd_send4bits-2560>>
+<<set_outputportmode-2560>>
+<<blank_ports-2560>>
+<<rsrw_macros-2560>>
+
+<<independent_instructions>>
+#+END_SRC
+
+The ~<<independent_instructions>>~ are assembler subroutines that can works regardless of the ports.
+
+#+name: independent_instructions
+#+BEGIN_SRC asm :noweb yes
 <<lcd_init>>
 <<lcd_senddata>>
 <<lcd_inst>>
@@ -85,7 +127,7 @@ The library have the following template:
 #+END_SRC
 
 ** Tell LCD that instruction is ready                              :private:
-Activate the enable and deactivate it to create a falling edge. This will tell to the LCD controller that the instruction bits are setted and ready to be red.
+Activate and deactivate the enable (E) connection to create a falling edge. This will tell to the LCD controller that the instruction bits are setted and ready to be red.
 
 Basically, turn on the third B port, wait 37\mu{}s then turn it off and wait again. The rest of PORTB is maintained intact.
 
@@ -101,6 +143,28 @@ Basically, turn on the third B port, wait 37\mu{}s then turn it off and wait aga
         rcall WAITMS
 	
         cbi OPORTB, 3 ; E
+
+        rcall WAITMS
+
+        pop r17
+        pop r16
+        ret
+#+END_SRC
+
+For the ATMega 2560 this code is used:
+
+#+name: lcd_instready-2560
+#+BEGIN_SRC asm
+.LCD_INSTREADY:
+        push r16
+        push r17
+
+        sbi OPORTC, 5 ; E
+	
+        ldi r16, 1
+        rcall WAITMS
+	
+        cbi OPORTC, 5 ; E
 
         rcall WAITMS
 
@@ -140,6 +204,130 @@ Read the PORTD pins in order to retain the other bits intact. Then send the cent
         ret
 #+END_SRC
 
+#+name lcd_send4bits-2560
+#+BEGIN_SRC asm
+.LCD_SEND4BITS:
+        push r17
+        push r16
+
+        andi r16, 0b00001111    ; keep the useful data and center it
+        
+        lds r17, PORTC		; Retain the other bits value, just modify the center one.
+        andi r17, 0b11110000
+        or r17, r16
+        out OPORTC, r16
+	
+        rcall .LCD_INSTREADY
+
+        pop r16
+        pop r17
+        ret
+#+END_SRC
+
+** Set port modes                                                  :private:
+The following code define subroutines to set the port modes. In order to send data to the display, the ports must be in output mode.
+
+*** Output mode ports
+
+#+name: set_outputportmode
+#+BEGIN_SRC asm
+.SET_OUTPUTPORTMODE:
+        sbi ODDRD, 2
+        sbi ODDRD, 3
+        sbi ODDRD, 4
+        sbi ODDRD, 5    
+
+        sbi ODDRB, 4 ; RS
+        sbi ODDRB, 3 ; E
+        sbi ODDRB, 2 ; RW
+        ret
+#+END_SRC
+
+For the ATMega 2560.
+
+#+name: set_outputportmode-2560
+#+BEGIN_SRC asm
+.SET_OUTPUTMODE:
+        sbi ODDRC, 7
+        sbi ODDRC, 6
+        sbi ODDRC, 5
+        sbi ODDRC, 4    
+
+        sbi ODDRC, 3 ; RS
+        sbi ODDRC, 2 ; E
+        sbi ODDRC, 1 ; RW
+        ret
+#+END_SRC
+
+** Blank ports                                                     :private:
+This clears the ports reseting them to zero.
+
+#+name: blank_ports
+#+BEGIN_SRC asm
+.BLANK_PORTS:
+        cbi OPORTD, 2
+        cbi OPORTD, 3
+        cbi OPORTD, 4
+        cbi OPORTD, 5
+
+        cbi OPORTB, 4
+        cbi OPORTB, 3
+        cbi OPORTB, 2
+        ret
+#+END_SRC
+
+#+name: blank_ports-2560
+#+BEGIN_SRC asm
+.BLANK_PORTS:
+        cbi OPORTC, 7
+        cbi OPORTC, 6
+        cbi OPORTC, 5
+        cbi OPORTC, 4
+
+        cbi OPORTC, 3
+        cbi OPORTC, 2
+        cbi OPORTC, 1
+        ret
+#+END_SRC
+
+
+
+** Macros to set RS and RW                                         :private:
+Sometimes, RS and RW must be setted or cleared. These macros make them a bit more portable to other ports.
+
+#+name: rsrw_macros
+#+BEGIN_SRC asm
+.macro clear_rs
+        cbi OPORTB, 4           ; RS
+.endm
+.macro clear_rw
+        cbi OPORTB, 2           ; RW	
+.endm
+.macro set_rs
+        sbi OPORTB, 4		; RS
+.endm
+.macro set_rw
+        sbi OPORTB, 2		; RW
+.endm
+#+END_SRC
+
+#+name: rsrw_macros-2560
+#+BEGIN_SRC asm
+.macro clear_rs
+        cbi OPORTC, 6           ; RS
+.endm
+.macro clear_rw
+        cbi OPORTC, 4           ; RW	
+.endm
+.macro set_rs
+        sbi OPORTC, 6		; RS
+.endm
+.macro set_rw
+        sbi OPORTC, 4		; RW
+.endm
+#+END_SRC
+
+
 ** Initialize LCD subroutine
 The board pins must be initialized along with the LCD. In order to give instruction to the LCD
 
@@ -149,7 +337,6 @@ LCD_INIT:
         push r16
         push r17
 <<lcd_init-set_ports>>
-<<lcd_init-blank_ports>>
 <<lcd_init-step_1>>
 <<lcd_init-step_2>>
 <<lcd_init-step_3>>
@@ -165,32 +352,12 @@ LCD_INIT:
 #+END_SRC
 
 *** Set port modes
-Set the Arduino ports in output mode. Firts, set the D ports mode (DDRD) and then the B ports (DDRB).
+Set the Arduino ports in output mode. Firts, set the D ports mode (DDRD) and then the B ports (DDRB). Also, blank the D and B port just in case: set all pins to zero.
 
 #+name: lcd_init-set_ports
 #+BEGIN_SRC asm
-        sbi ODDRD, 2
-        sbi ODDRD, 3
-        sbi ODDRD, 4
-        sbi ODDRD, 5    
-
-        sbi ODDRB, 4 ;; RS
-        sbi ODDRB, 3 ;; E
-        sbi ODDRB, 2 ;; RW
-#+END_SRC
-
-Also, blank the D and B port just in case: set all pins to zero.
-
-#+name: lcd_init-blank_ports
-#+BEGIN_SRC asm
-        cbi OPORTD, 2
-        cbi OPORTD, 3
-        cbi OPORTD, 4
-        cbi OPORTD, 5
-
-        cbi OPORTB, 4
-        cbi OPORTB, 3
-        cbi OPORTB, 2
+        rcall .SET_OUTPUTPORTMODE
+        rcall .BLANK_PORTS
 #+END_SRC
 
 *** Initialization process
@@ -307,18 +474,16 @@ The shift is needed because the 2nd port (PD2) is used and not the 0 one (PD0).
 #+name: lcd_senddata-send
 #+BEGIN_SRC asm
         mov r18, r16
-        andi r16, 0b11110000
+        andi r16, 0b11110000	
         lsr r16
         lsr r16
-        out OPORTD, r16
-        rcall .LCD_INSTREADY
+        lsr r16
+        lsr r16
+        rcall .LCD_SEND4BITS
 
         mov r16, r18
         andi r16, 0b00001111
-        lsl r16
-        lsl r16
-        out OPORTD, r16
-        rcall .LCD_INSTREADY
+        rcall .LCD_SEND4BITS
 #+END_SRC
 
 ** Send instruction
@@ -330,8 +495,8 @@ Parameters:
 #+name: lcd_inst
 #+BEGIN_SRC asm :noweb yes
 LCD_INST:
-        cbi OPORTB, 4           ; RS
-        cbi OPORTB, 2           ; RW
+        clear_rs
+        clear_rw
 
         rcall LCD_SENDDATA
 
@@ -547,12 +712,12 @@ Parameters:
 #+name: lcd_char
 #+BEGIN_SRC asm
 LCD_CHAR:
-        sbi OPORTB, 4		; RS
-        cbi OPORTB, 2		; RW
+        set_rs
+        clear_rw
 
         rcall LCD_SENDDATA
 
-        cbi OPORTB, 4		; RS
+        clear_rs
         ret
 #+END_SRC
 
@@ -682,7 +847,7 @@ RESET:
 	sleep
 	break
 	rjmp 1b
-.include "../../lcd-st7066.asm"
+.include "../../lcd-st7066-328p.asm"
 #+END_SRC
 
 
@@ -725,7 +890,7 @@ RESET:
 
 <<copy_to_ram>>
 
-.include "../../lcd-st7066.asm"
+.include "../../lcd-st7066-328p.asm"
 
 STATIC_DATA:
 #+END_SRC
@@ -828,14 +993,8 @@ RESET:
 	brne 1b
 	rjmp 2b
 
-.include "../../lcd-st7066.asm"
+.include "../../lcd-st7066-328p.asm"
 #+END_SRC
-
-
-* Things to do
-
-** TODO Replace sts and lds with in and out
-in and out instructions are faster.
 
 
 * Meta     :noexport:
