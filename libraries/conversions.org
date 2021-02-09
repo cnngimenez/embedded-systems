@@ -105,7 +105,57 @@ If these bits are between 0 and 9, add it to the ASCII code of '0' character. If
 #+END_SRC
 
 * TODO Hexadecimal string to byte
-* TODO Byte to decimal string
+* Byte to decimal string
+Convert an unsigned number in a register to a decimal string representation.
+
+Parameters:
+- r16 :: The number to convert.
+
+Output:
+- r19, r18, r17 :: The ASCII characters that represents the number.
+
+For example: if r16 = 250 (0xFA) then r19 = 50 ('2'), r18 = 53 ('5'), r17 = 48 ('0').
+
+To retrieve each digit, the number must be divided by 10, then the quotient should be divided by 10 again up to three times (the number of digits). The remainder of each step is used to get the ASCII character.
+
+The ASCII is obtained by adding 48 (the character '0' in ASCII) to each digit.
+
+1. 250 / 10 = (25, 0) then 0 + 48 ('0') = 48 ('0')
+2. 25 / 10 = (2, 5) then 5 + 48 ('0') = 53 ('5')
+3. 2 / 10 = (0, 2) then 2 + 48 ('0') = 50 ('2')
+
+#+name: byte2decstr
+#+BEGIN_SRC asm
+BYTE2DECSTR:
+	push r16
+	push r20
+	push r21
+
+	ldi r17, 10
+
+	rcall DIV
+	mov r16, r18
+	mov r21, r19		; r21 = third digit
+
+	rcall DIV
+	mov r16, r18
+	mov r20, r19		; r20 = second digit
+
+	rcall DIV		; r19 = first digit
+
+	ldi r17, '0'
+	add r17, r19		; r17 = firts ASCII digit
+	ldi r18, '0'
+	mov r18, r20		; r18 = second ASCII digit
+	ldi r19, '0'
+	mov r19, r21		; r19 = third ASCII digit
+
+	pop r21
+	pop r20
+	pop r16
+	ret
+#+END_SRC
+
 * TODO Decimal string to byte
 
 * Long Division
