@@ -3,7 +3,8 @@ Library main template:
 
 #+BEGIN_SRC asm :tangle conversions.asm :noweb yes
 <<license>>
-<<bite2hex>>
+<<byte2hex>>
+<<byte2decstr>>
 <<div>>
 <<div16>>
 #+END_SRC
@@ -135,20 +136,20 @@ BYTE2DECSTR:
 
 	rcall DIV
 	mov r16, r18
-	mov r21, r19		; r21 = third digit
+	mov r21, r19		; r21 = first digit
 
 	rcall DIV
 	mov r16, r18
 	mov r20, r19		; r20 = second digit
 
-	rcall DIV		; r19 = first digit
+	rcall DIV		; r19 = third digit
 
 	ldi r17, '0'
-	add r17, r19		; r17 = firts ASCII digit
+	add r17, r21		; r17 = firts ASCII digit
 	ldi r18, '0'
-	mov r18, r20		; r18 = second ASCII digit
-	ldi r19, '0'
-	mov r19, r21		; r19 = third ASCII digit
+	add r18, r20		; r18 = second ASCII digit
+	ldi r20, '0'
+	add r19, r20		; r19 = third ASCII digit
 
 	pop r21
 	pop r20
@@ -456,6 +457,49 @@ RESET:
 .include "../../conversions.asm"
 #+END_SRC
 
+** Byte to string example
+
+#+BEGIN_SRC asm :noweb yes :tangle tests/conversions/byte2str.asm
+<<license>>
+
+.include "../../registers-inc.asm"
+
+.set Num, 250 ; 250 = 0xFA
+
+.text
+RESET:
+	rcall LCD_INIT
+
+	ldi r16, Num
+	rcall BYTE2HEX
+	
+	mov r16, r18
+	rcall LCD_CHAR
+	mov r16, r17
+	rcall LCD_CHAR
+	
+	;; rcall LCD_SECOND_ROW
+	ldi r16, ' '
+	rcall LCD_CHAR
+
+	ldi r16, Num
+	rcall BYTE2DECSTR
+	
+	mov r16, r19
+	rcall LCD_CHAR
+	mov r16, r18
+	rcall LCD_CHAR
+	mov r16, r17
+	rcall LCD_CHAR
+
+1:
+	sleep
+	break
+	rjmp 1b
+
+.include "../../lcd-st7066-328p.asm"
+.include "../../conversions.asm"
+#+END_SRC
 
 * Meta     :noexport:
 
