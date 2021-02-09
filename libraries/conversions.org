@@ -5,6 +5,7 @@ Library main template:
 <<license>>
 <<bite2hex>>
 <<div>>
+<<div16>>
 #+END_SRC
 
 
@@ -103,7 +104,9 @@ If these bits are between 0 and 9, add it to the ASCII code of '0' character. If
         ret
 #+END_SRC
 
-* Hexadecimal string to byte
+* TODO Hexadecimal string to byte
+* TODO Byte to decimal string
+* TODO Decimal string to byte
 
 * Long Division
 Divide two numbers using the long division algorithm and return the quotient ad remainder.
@@ -136,6 +139,11 @@ for i := n -1 .. 0 loop
 end loop;
 #+END_SRC
 
+Before applying the algorithm, some common results are checked:
+- if N/1 then return N
+- if 0/D then return 0
+- if N/N then return 1
+
 #+name: div
 #+BEGIN_SRC asm
 DIV:
@@ -146,12 +154,23 @@ DIV:
 	ldi r18, 0		; Q := 0;
 	ldi r19, 0		; R := 0;
 
-	cpi r17, 1		; if D = 1 (N/1 = N) then copy r16
+	;; if N = 0 (0/D = 0) then return
+	cpi r16, 0
+	breq 3f
+	;; if N = D then return 1
+	cp r16, r17
+	brne 1f
+	ldi r18, 1
+	rjmp 3f
+1:
+	;; if D = 1 (N/1 = N) then return N
+	cpi r17, 1		
 	brne 4f
 	mov r18, r16
 	rjmp 3f
 
 4:
+	;; Division algorithm
 	ldi r20, 8		; for i := 7 .. 0 loop
 1:
 	lsl r19			; R := R << 1;
@@ -176,6 +195,96 @@ DIV:
 	lsr r18
 3:
 	pop r20
+	pop r17
+	pop r16
+	ret
+#+END_SRC
+
+* Division with 16 bits
+Divide two 16 bits unsigned numbers and return the quotient and remainder.
+
+The operation is N/D = (Q ,R). Where all numbers are 16 bits, thus are represented with two 8-bit registers. L means that is the lower byte, H is the higher.
+
+Parameters:
+- r16, r17 :: NL and NH respectively.
+- r18, r19 :: DL and DH respectively.
+
+Output:
+- r20, r21 :: QL and QH respectively.
+- r22, r23 :: RL and RH respectively.
+
+The algorithm is simmilar to the division with 8 bits but expanded to two registers.
+
+#+name: div16
+#+BEGIN_SRC asm
+DIV16:
+	push r16		; NL
+	push r17		; NH
+	push r18		; DL
+	push r19		; DH
+	push r24		; i
+
+	ldi r20, 0		; Q := 0;
+	ldi r21, 0
+	ldi r22, 0		; R := 0;
+	ldi r23, 0
+
+	;; if N = 0 (0/D = 0) then set results to 0
+	cpi r17, 0
+	brne 1f
+	cpi r16, 0
+	brne 1f
+	rjmp 3f
+1:	
+	;; if D = 1 (N/1 = N) then copy N to Q
+	cpi r19, 0
+	brne 4f
+	cpi r18, 1		
+	brne 4f
+	mov r20, r16
+	mov r21, r17	
+	rjmp 3f
+
+	;; Division Algorithm
+4:
+	ldi r24, 16		; for i := 16 .. 1 loop
+1:
+	clc			; R := R << 1;
+	rol r22
+	rol r23
+
+				; R(0) := N(i);
+	sbrc r17, 7		;     if N(i) is 0, skip instruction
+	ori r22, 0x01
+	clc			;     simmulates next indexing
+	rol r16
+	rol r17
+
+	cp r23, r19		; if R >= D then
+	brlo 2f
+	cp r22, r18
+	brlo 2f	
+	;; R >= D
+	clc			; R := R - D;
+	sbc r22, r18
+	sbc r23, r19
+
+	ori r20, 0x01		; Q(i) := 1; (continues with lsl r18)
+2:
+	clc			; (Part of the Q(i) := 1 or Q(i) := 0).
+	rol r20
+	rol r21
+	dec r24			; end loop;
+	cpi r24, 0
+	brne 1b
+
+	clc
+	ror r21
+	ror r20
+3:
+	pop r24
+	pop r19
+	pop r18
 	pop r17
 	pop r16
 	ret
@@ -219,6 +328,70 @@ RESET:
 	rcall LCD_CHAR
 
 	mov r16, r19
+	rcall LCD_SENDHEX
+
+	ldi r16, ')'
+	rcall LCD_CHAR
+
+1:
+	sleep
+	break
+	rjmp 1b
+
+.include "../../lcd-st7066-328p.asm"
+.include "../../conversions.asm"
+#+END_SRC
+
+** 16 bits Division example
+#+BEGIN_SRC asm :noweb yes :tangle tests/conversions/div16.asm
+<<license>>
+
+.include "../../registers-inc.asm"
+
+.set NumL, 0xff
+.set NumH, 0xff
+
+.set DenL, 0xff
+.set DenH, 0x0f
+
+;; Results is: 0xff/0x0fff =  0x10
+
+.text
+RESET:
+	rcall LCD_INIT
+
+	ldi r16, NumH
+	rcall LCD_SENDHEX
+	ldi r16, NumL
+	rcall LCD_SENDHEX
+	ldi r16, '/'
+	rcall LCD_CHAR
+	ldi r16, DenH
+	rcall LCD_SENDHEX
+	ldi r16, DenL
+	rcall LCD_SENDHEX	
+	ldi r16, '='
+	rcall LCD_CHAR
+	
+	ldi r16, NumL
+	ldi r17, NumH
+	ldi r18, DenL
+	ldi r19, DenH
+	rcall DIV16
+
+	ldi r16, '('
+	rcall LCD_CHAR
+	mov r16, r20
+	rcall LCD_SENDHEX
+	mov r16, r21
+	rcall LCD_SENDHEX
+
+	ldi r16, ','
+	rcall LCD_CHAR
+
+	mov r16, r22
+	rcall LCD_SENDHEX
+	mov r16, r23
 	rcall LCD_SENDHEX
 
 	ldi r16, ')'
