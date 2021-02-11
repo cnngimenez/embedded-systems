@@ -42,6 +42,28 @@ The DDRAM maps the display characters, writing it will make the device show this
 
 The CGRAM is used to create new characters.
 
+** Symbols used in DDRAM
+
+|   | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9  | A  | B  | C  | D | E | F |
+|---+---+---+---+---+---+---+---+---+---+----+----+----+----+---+---+---|
+| 0 |   |   | 0 | @ | P | ` | p |   |   |    | ー | タ | ミ |   |   |   |
+| 1 |   | ! | 1 | A | Q | a | q |   |   | 。 | ア | チ | ム |   |   |   |
+| 2 |   | " | 2 | B | R | b | r |   |   | 「 | イ | ツ | メ |   |   |   |
+| 3 |   | # | 3 | C | S | c | s |   |   | 」 | ウ | テ | モ |   |   |   |
+| 4 |   | $ | 4 | D | T | d | t |   |   | 、 | エ | ト | ヤ |   |   |   |
+| 5 |   |   | 5 | E | U | e | u |   |   |    | オ | ナ | ユ |   |   |   |
+| 6 |   |   | 6 | F | V | f | v |   |   |    | カ | ニ | ヨ |   |   |   |
+| 7 |   |   | 7 | G | W | g | w |   |   |    | キ | ヌ | ラ |   |   |   |
+| 8 |   |   | 8 | H | X | h | x |   |   |    | ク | ネ | リ |   |   |   |
+| 9 |   |   | 9 | I | Y | i | y |   |   |    | ケ | ノ | ル |   |   |   |
+| A |   |   |   | J | Z | j | z |   |   |    | コ | ハ | レ |   |   |   |
+| B |   |   |   | K |   | k |   |   |   |    | サ | ヒ | ロ |   |   |   |
+| C |   |   |   | L |   | l |   |   |   |    | シ | フ | ワ |   |   |   |
+| D |   |   |   | M |   | m |   |   |   |    | ス | ヘ | ン |   |   |   |
+| E |   |   |   | N |   | n |   |   |   |    | セ | ホ |    |   |   |   |
+| F |   |   |   | O |   | o |   |   |   |    | ソ | マ |    |   |   |   |
+
+
 * The library
 The library have the following template:
 
@@ -95,6 +117,7 @@ The ~<<independent_instructions>>~ are assembler subroutines that can works rega
 <<lcd_fourth_row>>
 <<lcd_string>>
 <<lcd_sendhex>>
+<<lcd_sendnum>>
 #+END_SRC
 
   
@@ -125,6 +148,7 @@ The ~<<independent_instructions>>~ are assembler subroutines that can works rega
 #+name: headers
 #+BEGIN_SRC asm
 .include "wait-lib.asm"
+.include "conversions.asm"
 #+END_SRC
 
 ** Tell LCD that instruction is ready                              :private:
@@ -195,7 +219,7 @@ Read the PORTD pins in order to retain the other bits intact. Then send the cent
         
         lds r17, PORTD		; Retain the other bits value, just modify the center one.
         andi r17, 0b11000011
-        or r17, r16
+        or r16, r17
         out OPORTD, r16
 	
         rcall .LCD_INSTREADY
@@ -205,7 +229,7 @@ Read the PORTD pins in order to retain the other bits intact. Then send the cent
         ret
 #+END_SRC
 
-#+name lcd_send4bits-2560
+#+name: lcd_send4bits-2560
 #+BEGIN_SRC asm
 .LCD_SEND4BITS:
         push r17
@@ -213,9 +237,9 @@ Read the PORTD pins in order to retain the other bits intact. Then send the cent
 
         andi r16, 0b00001111    ; keep the useful data and center it
         
-        lds r17, PORTC		; Retain the other bits value, just modify the center one.
+        in r17, OPORTC		; Retain the other bits value, just modify the center one.
         andi r17, 0b11110000
-        or r17, r16
+        or r16, r17
         out OPORTC, r16
 	
         rcall .LCD_INSTREADY
@@ -248,15 +272,15 @@ For the ATMega 2560.
 
 #+name: set_outputportmode-2560
 #+BEGIN_SRC asm
-.SET_OUTPUTMODE:
-        sbi ODDRC, 7
-        sbi ODDRC, 6
-        sbi ODDRC, 5
-        sbi ODDRC, 4    
+.SET_OUTPUTPORTMODE:
+        sbi ODDRC, 0
+        sbi ODDRC, 1
+        sbi ODDRC, 2
+        sbi ODDRC, 3    
 
-        sbi ODDRC, 3 ; RS
-        sbi ODDRC, 2 ; E
-        sbi ODDRC, 1 ; RW
+        sbi ODDRC, 4 ; RW
+        sbi ODDRC, 5 ; E
+        sbi ODDRC, 6 ; RS
         ret
 #+END_SRC
 
@@ -280,18 +304,16 @@ This clears the ports reseting them to zero.
 #+name: blank_ports-2560
 #+BEGIN_SRC asm
 .BLANK_PORTS:
-        cbi OPORTC, 7
-        cbi OPORTC, 6
-        cbi OPORTC, 5
-        cbi OPORTC, 4
-
-        cbi OPORTC, 3
-        cbi OPORTC, 2
+        cbi OPORTC, 0
         cbi OPORTC, 1
+        cbi OPORTC, 2
+        cbi OPORTC, 3
+
+        cbi OPORTC, 4
+        cbi OPORTC, 5
+        cbi OPORTC, 6
         ret
 #+END_SRC
-
-
 
 ** Macros to set RS and RW                                         :private:
 Sometimes, RS and RW must be setted or cleared. These macros make them a bit more portable to other ports.
@@ -832,64 +854,51 @@ LCD_SENDHEX:
         push r18
         push r17
 
-<<lcd_sendhex-convert_higher>>
-<<lcd_sendhex-convert_lower>>
+        rcall BYTE2HEX
 
+        mov r16, r18
+        rcall LCD_CHAR
+        mov r16, r17
+        rcall LCD_CHAR
+	
         pop r17
         pop r18
         pop r16
         ret	
 #+END_SRC
 
-Converting a byte to hex is achieved by 4 bits: first convert the higher 4 bits and then the lower ones.
-If 4 bits is between 0 and 9, add it to the ASCII code of '0' character. If number is greater than 9, substract 10 and add it to the 'A' ASCII code character.
+** Send an 8-bit number in decimal
+Convert a number (8-bit unsigned integer) to a decimal string representation and show it on the LCD.
 
-This code converts the higher 4 bits.
+This subroutine uses up to three characters (000 to 255) to represent the number on the LCD.
 
-#+name: lcd_sendhex-convert_higher
+Parameters:
+- r16 :: The number to show.
+
+#+name: lcd_sendnum
 #+BEGIN_SRC asm
-        mov r18, r16
-        lsr r16
-        lsr r16
-        lsr r16
-        lsr r16
+LCD_SENDNUM:
+	push r16
+	push r17
+	push r18
+	push r19
 
-        cpi r16, 10
-        brlo 1f
-        ;; r16 is greater or equal than 10
-        subi r16, 10
-        ldi r17, 'A'
-        add r16, r17
-        rjmp 2f
-1:
-        ;; r16 is lower than 10
-        ldi r17, '0'
-        add r16, r17
-2:
-        rcall LCD_CHAR
+	rcall BYTE2DECSTR
+
+	mov r16, r19
+	rcall LCD_CHAR
+	mov r16, r18
+	rcall LCD_CHAR
+	mov r16, r17
+	rcall LCD_CHAR
+
+	pop r19
+	pop r18
+	pop r17
+	pop r16
+	ret
 #+END_SRC
 
-The following code converts the lower 4 bits. First, restore the r16 register and clear the higher bits, then proceed as before.
-
-#+name: lcd_sendhex-convert_lower
-#+BEGIN_SRC asm
-        mov r16, r18
-        andi r16, 0b00001111
-
-        cpi r16, 10
-        brlo 1f
-        ;; r16 is greater or equal than 10
-        subi r16, 10
-        ldi r17, 'A'
-        add r16, r17
-        rjmp 2f
-1:
-        ;; r16 is lower than 10
-        ldi r17, '0'
-        add r16, r17
-2:
-        rcall LCD_CHAR
-#+END_SRC
 
 * Hello world example
 This is a basic Hello world example. It can be used to test if the connection and the display works properly.

@@ -1,4 +1,4 @@
-;; Copyright 2019 Christian Gimenez
+;; Copyright 2021 Christian Gimenez
 	   
 ;; Author: Christian Gimenez
 
@@ -17,6 +17,7 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
 .include "wait-lib.asm"
+.include "conversions.asm"
 .LCD_INSTREADY:
         push r16
         push r17
@@ -286,43 +287,34 @@ LCD_SENDHEX:
         push r18
         push r17
 
-        mov r18, r16
-        lsr r16
-        lsr r16
-        lsr r16
-        lsr r16
+        rcall BYTE2HEX
 
-        cpi r16, 10
-        brlo 1f
-        ;; r16 is greater or equal than 10
-        subi r16, 10
-        ldi r17, 'A'
-        add r16, r17
-        rjmp 2f
-1:
-        ;; r16 is lower than 10
-        ldi r17, '0'
-        add r16, r17
-2:
-        rcall LCD_CHAR
         mov r16, r18
-        andi r16, 0b00001111
-
-        cpi r16, 10
-        brlo 1f
-        ;; r16 is greater or equal than 10
-        subi r16, 10
-        ldi r17, 'A'
-        add r16, r17
-        rjmp 2f
-1:
-        ;; r16 is lower than 10
-        ldi r17, '0'
-        add r16, r17
-2:
         rcall LCD_CHAR
-
+        mov r16, r17
+        rcall LCD_CHAR
+	
         pop r17
         pop r18
         pop r16
-        ret
+        ret	
+LCD_SENDNUM:
+	push r16
+	push r17
+	push r18
+	push r19
+
+	rcall BYTE2DECSTR
+
+	mov r16, r19
+	rcall LCD_CHAR
+	mov r16, r18
+	rcall LCD_CHAR
+	mov r16, r17
+	rcall LCD_CHAR
+
+	pop r19
+	pop r18
+	pop r17
+	pop r16
+	ret

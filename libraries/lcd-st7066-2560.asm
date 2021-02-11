@@ -1,4 +1,4 @@
-;; Copyright 2019 Christian Gimenez
+;; Copyright 2021 Christian Gimenez
 	   
 ;; Author: Christian Gimenez
 
@@ -17,6 +17,27 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
 .include "wait-lib.asm"
+.include "conversions.asm"
+.reverse:
+    push r17
+    mov r17, r16
+    ror r16  ;; rotate right, pushing bit 0 out to C flag
+    rol r17  ;; rotate left, moving C flag into bit 0 and pushing bit 7 out to C flag
+    ror r16
+    rol r17
+    ror r16
+    rol r17
+    ror r16
+    rol r17
+    ror r16
+    andi r16, 0xF0 ;; isolating bit 4 to 7
+    andi r17, 0x0F ;; isolating bit 0 to 3
+    or r16, r17    ;; combining
+    swap r16       ;; swapping	
+
+    pop r17
+    ret	
+	
 .LCD_INSTREADY:
         push r16
         push r17
@@ -33,26 +54,47 @@
         pop r17
         pop r16
         ret
+.LCD_SEND4BITS:
+        push r17
+        push r16
 
-.SET_OUTPUTMODE:
-        sbi ODDRC, 7
-        sbi ODDRC, 6
-        sbi ODDRC, 5
-        sbi ODDRC, 4    
+        andi r16, 0b00001111    ; keep the useful data and center it
+	rcall .reverse
+	lsr r16
+	lsr r16
+	lsr r16
+	lsr r16
 
-        sbi ODDRC, 3 ; RS
-        sbi ODDRC, 2 ; E
-        sbi ODDRC, 1 ; RW
+	nop
+        lds r17, PORTC		; Retain the other bits value, just modify the center one.
+        andi r17, 0b11110000
+        or r16, r17
+        out OPORTC, r16
+
+        rcall .LCD_INSTREADY
+
+        pop r16
+        pop r17
+        ret
+.SET_OUTPUTPORTMODE:
+        sbi ODDRC, 0
+        sbi ODDRC, 1
+        sbi ODDRC, 2
+        sbi ODDRC, 3    
+
+        sbi ODDRC, 4 ; RW
+        sbi ODDRC, 5 ; E
+        sbi ODDRC, 6 ; RS
         ret
 .BLANK_PORTS:
-        cbi OPORTC, 7
-        cbi OPORTC, 6
-        cbi OPORTC, 5
-        cbi OPORTC, 4
-
-        cbi OPORTC, 3
-        cbi OPORTC, 2
+        cbi OPORTC, 0
         cbi OPORTC, 1
+        cbi OPORTC, 2
+        cbi OPORTC, 3
+
+        cbi OPORTC, 4
+        cbi OPORTC, 5
+        cbi OPORTC, 6
         ret
 .macro clear_rs
         cbi OPORTC, 6           ; RS
@@ -269,43 +311,34 @@ LCD_SENDHEX:
         push r18
         push r17
 
-        mov r18, r16
-        lsr r16
-        lsr r16
-        lsr r16
-        lsr r16
+        rcall BYTE2HEX
 
-        cpi r16, 10
-        brlo 1f
-        ;; r16 is greater or equal than 10
-        subi r16, 10
-        ldi r17, 'A'
-        add r16, r17
-        rjmp 2f
-1:
-        ;; r16 is lower than 10
-        ldi r17, '0'
-        add r16, r17
-2:
-        rcall LCD_CHAR
         mov r16, r18
-        andi r16, 0b00001111
-
-        cpi r16, 10
-        brlo 1f
-        ;; r16 is greater or equal than 10
-        subi r16, 10
-        ldi r17, 'A'
-        add r16, r17
-        rjmp 2f
-1:
-        ;; r16 is lower than 10
-        ldi r17, '0'
-        add r16, r17
-2:
         rcall LCD_CHAR
-
+        mov r16, r17
+        rcall LCD_CHAR
+	
         pop r17
         pop r18
         pop r16
-        ret
+        ret	
+LCD_SENDNUM:
+	push r16
+	push r17
+	push r18
+	push r19
+
+	rcall BYTE2DECSTR
+
+	mov r16, r19
+	rcall LCD_CHAR
+	mov r16, r18
+	rcall LCD_CHAR
+	mov r16, r17
+	rcall LCD_CHAR
+
+	pop r19
+	pop r18
+	pop r17
+	pop r16
+	ret
